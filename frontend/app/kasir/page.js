@@ -225,9 +225,16 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
                 {cfg.label}
               </span>
             </div>
-            <p className="text-sm text-gray-500">
-              Meja {order.table?.number} · Lantai {order.table?.floor} · {formatTime(order.createdAt)}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm text-gray-500">
+                Meja {order.table?.number} · Lantai {order.table?.floor} · {formatTime(order.createdAt)}
+              </p>
+              {order.orderType === 'take-away' ? (
+                <span className="text-xs bg-purple-100 text-purple-600 border border-purple-200 rounded-full px-2 py-0.5 font-medium">🥡 Take Away</span>
+              ) : (
+                <span className="text-xs bg-green-50 text-green-600 border border-green-200 rounded-full px-2 py-0.5 font-medium">🪑 Dine In</span>
+              )}
+            </div>
           </div>
         </div>
         <div className="text-right">

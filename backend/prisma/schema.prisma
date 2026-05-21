@@ -38,6 +38,7 @@ model Order {
   table       Table       @relation(fields: [tableId], references: [id])
   status      String      @default("pending")
   // status: "pending" | "preparing" | "ready" | "done" | "cancelled"
+  orderType   String      @default("dine-in")  // "dine-in" | "take-away"
   totalAmount Int         // total harga dalam Rupiah
   notes       String?     // catatan tambahan dari customer
   createdAt   DateTime    @default(now())

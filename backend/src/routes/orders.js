@@ -10,6 +10,7 @@ const router = express.Router();
 // Validasi order baru dari customer
 const createOrderSchema = z.object({
   tableId: z.number().int().positive('tableId wajib diisi'),
+  orderType: z.enum(['dine-in', 'take-away']).default('dine-in'),
   notes: z.string().optional(),
   items: z
     .array(
@@ -88,7 +89,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { tableId, notes, items } = parsed.data;
+    const { tableId, orderType, notes, items } = parsed.data;
 
     // Cek meja ada
     const table = await prisma.table.findUnique({ where: { id: tableId } });
@@ -121,6 +122,7 @@ router.post('/', async (req, res) => {
     const order = await prisma.order.create({
       data: {
         tableId,
+        orderType,
         notes,
         totalAmount,
         items: {

@@ -18,7 +18,8 @@ export default function MejaPage() {
   const [activeCategory, setActiveCategory] = useState('semua');
   const [showCart, setShowCart] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(null);
-  const [addItemModal, setAddItemModal] = useState(null); // item yang sedang dibuka modal-nya
+  const [addItemModal, setAddItemModal] = useState(null);
+  const [orderType, setOrderType] = useState('dine-in'); // 'dine-in' | 'take-away'
 
   // Kategori yang butuh pilihan Hot/Ice
   const HOT_ICE_CATEGORIES = ['coffee', 'americano', 'slow-bar', 'signature'];
@@ -60,6 +61,7 @@ export default function MejaPage() {
     if (items.length === 0) return;
     orderMutation.mutate({
       tableId,
+      orderType,
       items: items.map((i) => ({ menuId: i.menuId, quantity: i.quantity, notes: i.notes })),
     });
   };
@@ -210,6 +212,8 @@ export default function MejaPage() {
           onRemove={removeItem}
           loading={orderMutation.isPending}
           menu={menu}
+          orderType={orderType}
+          setOrderType={setOrderType}
         />
       )}
     </div>
@@ -389,70 +393,96 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
 }
 
 // ─── Modal Keranjang ──────────────────────────────────
-function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, loading, menu }) {
+function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, loading, menu, orderType, setOrderType }) {
   return (
     <div className="fixed inset-0 z-30 flex items-end">
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      {/* Sheet */}
-      <div className="relative w-full bg-white rounded-t-3xl max-h-[80vh] flex flex-col shadow-2xl">
+      <div className="relative w-full bg-white rounded-t-3xl max-h-[85vh] flex flex-col shadow-2xl">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-lg font-bold text-gray-800">Pesanan Kamu</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {items.map((item) => {
-            const menuData = menu.find((m) => m.id === item.menuId);
-            return (
-              <div key={item.menuId} className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-gray-800">{item.name}</p>
-                    {item.notes === 'Ice' && (
-                      <span className="text-xs bg-blue-50 text-blue-500 border border-blue-100 rounded-full px-2 py-0.5">🧊 Ice</span>
+          {/* Pilihan Dine In / Take Away */}
+          <div className="mb-2">
+            <p className="text-sm font-semibold text-gray-600 mb-2">Tipe Pesanan</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setOrderType('dine-in')}
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition ${
+                  orderType === 'dine-in'
+                    ? 'border-orange-400 bg-orange-50 text-orange-600'
+                    : 'border-gray-200 text-gray-500 hover:border-orange-200'
+                }`}
+              >
+                <span className="text-lg">🪑</span> Dine In
+              </button>
+              <button
+                onClick={() => setOrderType('take-away')}
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition ${
+                  orderType === 'take-away'
+                    ? 'border-orange-400 bg-orange-50 text-orange-600'
+                    : 'border-gray-200 text-gray-500 hover:border-orange-200'
+                }`}
+              >
+                <span className="text-lg">🥡</span> Take Away
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t pt-3 space-y-3">
+            {items.map((item) => {
+              const menuData = menu.find((m) => m.id === item.menuId);
+              // Pisahkan notes: suhu (Ice/Hot) dari notes lain
+              const notesParts = item.notes ? item.notes.split(' · ') : [];
+              const tempNote = notesParts.find(n => n === 'Ice' || n === 'Hot');
+              const otherNotes = notesParts.filter(n => n !== 'Ice' && n !== 'Hot' && n !== 'none' && n !== '').join(', ');
+
+              return (
+                <div key={item.menuId} className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-medium text-gray-800 text-sm">{item.name}</p>
+                      {tempNote === 'Ice' && (
+                        <span className="text-xs bg-blue-50 text-blue-500 border border-blue-100 rounded-full px-1.5 py-0.5">🧊</span>
+                      )}
+                      {tempNote === 'Hot' && (
+                        <span className="text-xs bg-red-50 text-red-400 border border-red-100 rounded-full px-1.5 py-0.5">♨️</span>
+                      )}
+                    </div>
+                    {otherNotes && (
+                      <p className="text-xs text-orange-500 mt-0.5">📝 {otherNotes}</p>
                     )}
-                    {item.notes === 'Hot' && (
-                      <span className="text-xs bg-red-50 text-red-400 border border-red-100 rounded-full px-2 py-0.5">♨️ Hot</span>
-                    )}
+                    <p className="text-xs text-gray-400">{formatRupiah(item.price)} / item</p>
                   </div>
-                  <p className="text-sm text-orange-500">{formatRupiah(item.price)}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => onRemove(item.menuId)}
+                      className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center font-bold text-sm">−</button>
+                    <span className="w-5 text-center font-semibold text-sm">{item.quantity}</span>
+                    <button onClick={() => menuData && onAdd(menuData)}
+                      className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold text-sm">+</button>
+                  </div>
+                  <p className="w-16 text-right font-semibold text-gray-700 text-sm flex-shrink-0">
+                    {formatRupiah(item.price * item.quantity)}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onRemove(item.menuId)}
-                    className="w-7 h-7 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center font-bold"
-                  >
-                    −
-                  </button>
-                  <span className="w-5 text-center font-semibold">{item.quantity}</span>
-                  <button
-                    onClick={() => menuData && onAdd(menuData)}
-                    className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center font-bold"
-                  >
-                    +
-                  </button>
-                </div>
-                <p className="w-20 text-right font-semibold text-gray-700 text-sm">
-                  {formatRupiah(item.price * item.quantity)}
-                </p>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
+        {/* Footer */}
         <div className="px-6 py-4 border-t">
-          <div className="flex justify-between mb-4">
-            <span className="text-gray-600">Total</span>
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-gray-600 font-medium">Total</span>
             <span className="text-xl font-bold text-orange-500">{formatRupiah(total)}</span>
           </div>
-          <button
-            onClick={onOrder}
-            disabled={loading}
-            className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-orange-600 transition disabled:opacity-50"
-          >
-            {loading ? 'Mengirim...' : 'Pesan Sekarang 🚀'}
+          <button onClick={onOrder} disabled={loading}
+            className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-orange-600 transition disabled:opacity-50">
+            {loading ? 'Mengirim...' : `Pesan Sekarang 🚀`}
           </button>
         </div>
       </div>
