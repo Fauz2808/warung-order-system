@@ -14,8 +14,8 @@ const menuSchema = z.object({
   name: z.string().min(1, 'Nama menu wajib diisi'),
   description: z.string().optional(),
   price: z.number().int().positive('Harga harus lebih dari 0'),
-  category: z.enum(['makanan', 'minuman'], {
-    errorMap: () => ({ message: 'Kategori harus "makanan" atau "minuman"' }),
+  category: z.enum(['signature', 'coffee', 'americano', 'slow-bar', 'non-coffee', 'foods', 'additional', 'makanan', 'minuman'], {
+    errorMap: () => ({ message: 'Kategori tidak valid' }),
   }),
   imageUrl: z.string().url().optional().or(z.literal('')),
   isAvailable: z.boolean().optional().default(true),
