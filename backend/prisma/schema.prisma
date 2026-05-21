@@ -1,0 +1,57 @@
+// Prisma Schema — Warung Order System
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Menu {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String?
+  price       Int         // dalam Rupiah, contoh: 25000
+  category    String      // "makanan" | "minuman"
+  imageUrl    String?
+  isAvailable Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orderItems  OrderItem[]
+}
+
+model Table {
+  id         Int      @id @default(autoincrement())
+  number     Int      @unique  // nomor meja, unik
+  floor      Int      @default(1)  // lantai 1, 2, dst
+  isOccupied Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  orders     Order[]
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  tableId     Int
+  table       Table       @relation(fields: [tableId], references: [id])
+  status      String      @default("pending")
+  // status: "pending" | "preparing" | "ready" | "done" | "cancelled"
+  totalAmount Int         // total harga dalam Rupiah
+  notes       String?     // catatan tambahan dari customer
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id       Int     @id @default(autoincrement())
+  orderId  Int
+  order    Order   @relation(fields: [orderId], references: [id])
+  menuId   Int
+  menu     Menu    @relation(fields: [menuId], references: [id])
+  quantity Int
+  price    Int     // snapshot harga saat order dibuat
+  notes    String? // catatan per item, contoh: "tidak pakai pedas"
+}
