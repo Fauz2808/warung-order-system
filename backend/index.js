@@ -17,16 +17,32 @@ const settingsRoutes = require('./src/routes/settings');
 const app = express();
 const server = http.createServer(app); // Bungkus express dengan http server (wajib untuk Socket.IO)
 
+// CORS — terima Vercel + localhost
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3001',
+  'http://localhost:3000',
+].filter(Boolean).map(o => o.replace(/\/$/, '')); // hapus trailing slash
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Izinkan kalau tidak ada origin (curl/postman) atau match allowed list atau *.vercel.app
+    if (!origin || ALLOWED_ORIGINS.includes(origin) || /\.vercel\.app$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} tidak diizinkan`));
+    }
+  },
+  credentials: true,
+};
+
 // Setup Socket.IO
 const io = new Server(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
-    methods: ['GET', 'POST'],
-  },
+  cors: { origin: corsOptions.origin, methods: ['GET', 'POST'] },
 });
 
 // ─── Middleware ────────────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3001' }));
+app.use(cors(corsOptions));
 app.use(express.json()); // Biar bisa baca req.body dalam format JSON
 
 // Injeksi io ke semua request, biar routes bisa emit Socket.IO events
