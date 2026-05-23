@@ -54,23 +54,36 @@ export default function PengaturanPage() {
   const isCurrentlyOpen = settings?.isOpen;
 
   return (
-    <div className="p-6 max-w-2xl space-y-6">
+    <div className="p-6 max-w-2xl space-y-6" style={{ backgroundColor: '#F7F7F5', minHeight: '100vh' }}>
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800">⚙️ Pengaturan</h1>
-        <p className="text-sm text-gray-500 mt-1">Atur jam operasional dan status warung</p>
+        <h1 className="text-2xl font-bold" style={{ color: '#1C1C1A' }}>⚙️ Pengaturan</h1>
+        <p className="text-sm mt-1" style={{ color: '#6B7560' }}>Atur jam operasional dan status warung</p>
       </div>
 
       {/* Status card */}
-      <div className={`rounded-2xl border p-5 ${isCurrentlyOpen ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+      <div
+        className="rounded-2xl border p-5"
+        style={
+          isCurrentlyOpen
+            ? { backgroundColor: '#EDF1EA', borderColor: '#c8d8c0' }
+            : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }
+        }
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-4 h-4 rounded-full ${isCurrentlyOpen ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+            <div
+              className="w-4 h-4 rounded-full animate-pulse"
+              style={{ backgroundColor: isCurrentlyOpen ? '#658051' : '#DC2626' }}
+            />
             <div>
-              <p className={`font-bold text-lg ${isCurrentlyOpen ? 'text-green-700' : 'text-red-700'}`}>
+              <p
+                className="font-bold text-lg"
+                style={{ color: isCurrentlyOpen ? '#658051' : '#DC2626' }}
+              >
                 Warung {isCurrentlyOpen ? 'Buka' : 'Tutup'}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm" style={{ color: '#6B7560' }}>
                 {settings?.isForceClose
                   ? 'Ditutup paksa oleh admin'
                   : `Jam operasional: ${settings?.openTime ?? '...'} – ${settings?.closeTime ?? '...'} WIB`}
@@ -80,17 +93,17 @@ export default function PengaturanPage() {
 
           {/* Toggle tutup paksa */}
           <div className="text-right">
-            <p className="text-xs text-gray-500 mb-1.5">Tutup Paksa</p>
+            <p className="text-xs mb-1.5" style={{ color: '#6B7560' }}>Tutup Paksa</p>
             <button
               onClick={() => toggleForceMutation.mutate(!settings?.isForceClose)}
               disabled={toggleForceMutation.isPending || isLoading}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full transition ${
-                settings?.isForceClose ? 'bg-red-500' : 'bg-gray-300'
-              } disabled:opacity-50`}
+              className="relative inline-flex h-7 w-14 items-center rounded-full transition disabled:opacity-50"
+              style={{ backgroundColor: settings?.isForceClose ? '#DC2626' : '#E8ECE4' }}
             >
-              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                settings?.isForceClose ? 'translate-x-8' : 'translate-x-1'
-              }`} />
+              <span
+                className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform"
+                style={{ transform: settings?.isForceClose ? 'translateX(32px)' : 'translateX(4px)' }}
+              />
             </button>
           </div>
         </div>
@@ -98,7 +111,7 @@ export default function PengaturanPage() {
         {settings?.isForceClose && (
           <div className="mt-3 flex items-center gap-2 bg-white/60 rounded-xl px-4 py-2.5">
             <span>⚠️</span>
-            <p className="text-sm text-red-700">
+            <p className="text-sm" style={{ color: '#DC2626' }}>
               Tutup paksa aktif — customer tidak bisa order sampai dimatikan
             </p>
           </div>
@@ -106,40 +119,49 @@ export default function PengaturanPage() {
       </div>
 
       {/* Form jam operasional */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-bold text-gray-800 mb-1">🕐 Jam Operasional</h2>
-        <p className="text-xs text-gray-400 mb-5">
+      <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
+        <h2 className="font-bold mb-1" style={{ color: '#1C1C1A' }}>🕐 Jam Operasional</h2>
+        <p className="text-xs mb-5" style={{ color: '#9CA38F' }}>
           Customer tidak bisa order di luar jam ini. Semua waktu dalam WIB (GMT+7).
         </p>
 
         <form onSubmit={handleSave} className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium mb-1.5" style={{ color: '#1C1C1A' }}>
                 🟢 Jam Buka
               </label>
               <input
                 type="time"
                 value={form.openTime}
                 onChange={(e) => setForm({ ...form, openTime: e.target.value })}
-                className="w-full border rounded-xl px-3 py-2.5 text-lg font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                className="w-full border rounded-xl px-3 py-2.5 text-lg font-semibold focus:outline-none"
+                style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium mb-1.5" style={{ color: '#1C1C1A' }}>
                 🔴 Jam Tutup
               </label>
               <input
                 type="time"
                 value={form.closeTime}
                 onChange={(e) => setForm({ ...form, closeTime: e.target.value })}
-                className="w-full border rounded-xl px-3 py-2.5 text-lg font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                className="w-full border rounded-xl px-3 py-2.5 text-lg font-semibold focus:outline-none"
+                style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
               />
             </div>
           </div>
 
           {/* Preview jadwal */}
-          <div className="bg-orange-50 rounded-xl px-4 py-3 flex items-center gap-2 text-sm text-orange-700">
+          <div
+            className="rounded-xl px-4 py-3 flex items-center gap-2 text-sm"
+            style={{ backgroundColor: '#EDF1EA', color: '#4d6340' }}
+          >
             <span>ℹ️</span>
             <span>
               Warung akan buka dari <strong>{form.openTime}</strong> sampai <strong>{form.closeTime}</strong> WIB setiap hari
@@ -149,7 +171,10 @@ export default function PengaturanPage() {
           <button
             type="submit"
             disabled={saveMutation.isPending}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full text-white py-3 rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ backgroundColor: '#658051' }}
+            onMouseEnter={(e) => !saveMutation.isPending && (e.currentTarget.style.backgroundColor = '#4d6340')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#658051')}
           >
             {saveMutation.isPending ? (
               <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Menyimpan...</>
@@ -159,13 +184,25 @@ export default function PengaturanPage() {
       </div>
 
       {/* Info */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
-        <h2 className="font-bold text-gray-800 mb-3">📋 Cara Kerja</h2>
-        <ul className="space-y-2 text-sm text-gray-600">
-          <li className="flex gap-2"><span>•</span> <span>Di luar jam operasional, halaman customer menampilkan pesan <strong>"Warung Tutup"</strong></span></li>
-          <li className="flex gap-2"><span>•</span> <span>Customer tidak bisa submit order saat warung tutup</span></li>
-          <li className="flex gap-2"><span>•</span> <span><strong>Tutup Paksa</strong> menutup warung kapan saja (berguna saat libur mendadak)</span></li>
-          <li className="flex gap-2"><span>•</span> <span>Semua jam dalam zona waktu <strong>WIB (GMT+7)</strong></span></li>
+      <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
+        <h2 className="font-bold mb-3" style={{ color: '#1C1C1A' }}>📋 Cara Kerja</h2>
+        <ul className="space-y-2 text-sm" style={{ color: '#6B7560' }}>
+          <li className="flex gap-2">
+            <span>•</span>
+            <span>Di luar jam operasional, halaman customer menampilkan pesan <strong style={{ color: '#1C1C1A' }}>&quot;Warung Tutup&quot;</strong></span>
+          </li>
+          <li className="flex gap-2">
+            <span>•</span>
+            <span>Customer tidak bisa submit order saat warung tutup</span>
+          </li>
+          <li className="flex gap-2">
+            <span>•</span>
+            <span><strong style={{ color: '#1C1C1A' }}>Tutup Paksa</strong> menutup warung kapan saja (berguna saat libur mendadak)</span>
+          </li>
+          <li className="flex gap-2">
+            <span>•</span>
+            <span>Semua jam dalam zona waktu <strong style={{ color: '#1C1C1A' }}>WIB (GMT+7)</strong></span>
+          </li>
         </ul>
       </div>
     </div>

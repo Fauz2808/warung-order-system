@@ -203,36 +203,52 @@ export default function AdminMenuPage() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="p-6">
+    <div className="p-6" style={{ backgroundColor: '#F7F7F5', minHeight: '100vh' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">🍽️ Kelola Menu</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold" style={{ color: '#1C1C1A' }}>🍽️ Kelola Menu</h1>
+          <p className="text-sm mt-1" style={{ color: '#6B7560' }}>
             {menu.length} menu ·{' '}
             {CATEGORIES.filter((c) => counts[c.value] > 0).map((c) => `${counts[c.value]} ${c.label.toLowerCase()}`).join(' · ')}
           </p>
         </div>
-        <button onClick={openAdd}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2">
+        <button
+          onClick={openAdd}
+          className="text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2"
+          style={{ backgroundColor: '#658051' }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4d6340'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#658051'}
+        >
           <span>+</span> Tambah Menu
         </button>
       </div>
 
       {/* Filter kategori */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        <button onClick={() => setFilterCat('semua')}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-            filterCat === 'semua' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
-          }`}>
+        <button
+          onClick={() => setFilterCat('semua')}
+          className="px-4 py-1.5 rounded-full text-sm font-medium transition"
+          style={
+            filterCat === 'semua'
+              ? { backgroundColor: '#658051', color: '#FFFFFF', border: '1px solid #658051' }
+              : { backgroundColor: '#FFFFFF', color: '#6B7560', border: '1px solid #E8ECE4' }
+          }
+        >
           Semua ({menu.length})
         </button>
         {CATEGORIES.map((cat) => (
           counts[cat.value] > 0 && (
-            <button key={cat.value} onClick={() => setFilterCat(cat.value)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-                filterCat === cat.value ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
-              }`}>
+            <button
+              key={cat.value}
+              onClick={() => setFilterCat(cat.value)}
+              className="px-4 py-1.5 rounded-full text-sm font-medium transition"
+              style={
+                filterCat === cat.value
+                  ? { backgroundColor: '#658051', color: '#FFFFFF', border: '1px solid #658051' }
+                  : { backgroundColor: '#FFFFFF', color: '#6B7560', border: '1px solid #E8ECE4' }
+              }
+            >
               {cat.emoji} {cat.label} ({counts[cat.value]})
             </button>
           )
@@ -240,36 +256,43 @@ export default function AdminMenuPage() {
       </div>
 
       {/* Tabel menu */}
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden overflow-x-auto">
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden overflow-x-auto" style={{ border: '1px solid #E8ECE4' }}>
         {isLoading ? (
-          <div className="p-10 text-center text-gray-400">Memuat menu...</div>
+          <div className="p-10 text-center" style={{ color: '#9CA38F' }}>Memuat menu...</div>
         ) : filtered.length === 0 ? (
-          <div className="p-10 text-center text-gray-400">
+          <div className="p-10 text-center" style={{ color: '#9CA38F' }}>
             <p className="text-4xl mb-2">🍽️</p>
             <p>Belum ada menu. Klik &quot;Tambah Menu&quot; untuk mulai.</p>
           </div>
         ) : (
           <table className="w-full text-sm min-w-[640px]">
-            <thead className="bg-gray-50 border-b">
+            <thead className="border-b" style={{ backgroundColor: '#F7F7F5', borderColor: '#E8ECE4' }}>
               <tr>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600 w-14">Foto</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Nama Menu</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Kategori</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600">Harga</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Stok</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Tersedia</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Aksi</th>
+                <th className="text-left px-4 py-3 font-semibold w-14" style={{ color: '#6B7560' }}>Foto</th>
+                <th className="text-left px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Nama Menu</th>
+                <th className="text-left px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Kategori</th>
+                <th className="text-right px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Harga</th>
+                <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Stok</th>
+                <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Tersedia</th>
+                <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y" style={{ borderColor: '#E8ECE4' }}>
               {filtered.map((item) => {
                 const catInfo = getCategoryInfo(item.category);
                 return (
-                  <tr key={item.id} className="hover:bg-gray-50 transition">
+                  <tr
+                    key={item.id}
+                    className="transition"
+                    style={{ backgroundColor: '#FFFFFF' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FAFAF8'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                  >
                     {/* Kolom foto — klik untuk upload */}
                     <td className="px-4 py-3">
                       <div
-                        className="w-10 h-10 rounded-xl overflow-hidden bg-orange-50 flex items-center justify-center cursor-pointer hover:opacity-80 transition border border-gray-100 relative group"
+                        className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-80 transition relative group"
+                        style={{ backgroundColor: '#EDF1EA', border: '1px solid #E8ECE4' }}
                         onClick={() => setUploadTarget(item)}
                         title="Klik untuk upload/ganti foto"
                       >
@@ -286,9 +309,9 @@ export default function AdminMenuPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800">{item.name}</p>
+                      <p className="font-medium" style={{ color: '#1C1C1A' }}>{item.name}</p>
                       {item.description && (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{item.description}</p>
+                        <p className="text-xs mt-0.5 truncate max-w-xs" style={{ color: '#9CA38F' }}>{item.description}</p>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -296,7 +319,7 @@ export default function AdminMenuPage() {
                         {catInfo.emoji} {catInfo.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-700">
+                    <td className="px-4 py-3 text-right font-semibold" style={{ color: '#1C1C1A' }}>
                       {formatRupiah(item.price)}
                     </td>
                     {/* Kolom stok */}
@@ -305,18 +328,25 @@ export default function AdminMenuPage() {
                         <button
                           onClick={() => stockMutation.mutate({ id: item.id, delta: -1 })}
                           disabled={item.stock === null || item.stock === 0}
-                          className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm flex items-center justify-center disabled:opacity-30 transition"
+                          className="w-6 h-6 rounded-lg font-bold text-sm flex items-center justify-center transition disabled:opacity-30"
+                          style={{ backgroundColor: '#EDF1EA', color: '#658051' }}
+                          onMouseEnter={(e) => !e.currentTarget.disabled && (e.currentTarget.style.backgroundColor = '#c8d8c0')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#EDF1EA')}
                         >−</button>
                         <span className={`w-10 text-center text-sm font-semibold ${
-                          item.stock === null ? 'text-gray-400' :
+                          item.stock === null ? '' :
                           item.stock === 0    ? 'text-red-500' :
-                          item.stock <= 5     ? 'text-orange-500' : 'text-gray-700'
-                        }`}>
+                          item.stock <= 5     ? 'text-amber-500' : ''
+                        }`}
+                        style={item.stock === null ? { color: '#9CA38F' } : item.stock > 5 ? { color: '#1C1C1A' } : {}}>
                           {item.stock === null ? '∞' : item.stock}
                         </span>
                         <button
                           onClick={() => stockMutation.mutate({ id: item.id, delta: +1 })}
-                          className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm flex items-center justify-center transition"
+                          className="w-6 h-6 rounded-lg font-bold text-sm flex items-center justify-center transition"
+                          style={{ backgroundColor: '#EDF1EA', color: '#658051' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#c8d8c0'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EDF1EA'}
                         >+</button>
                       </div>
                       {item.stock !== null && item.stock === 0 && (
@@ -326,22 +356,33 @@ export default function AdminMenuPage() {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => toggleMutation.mutate({ id: item.id, isAvailable: !item.isAvailable })}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                          item.isAvailable ? 'bg-green-500' : 'bg-gray-300'
-                        }`}>
-                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                          item.isAvailable ? 'translate-x-6' : 'translate-x-1'
-                        }`} />
+                        className="relative inline-flex h-6 w-11 items-center rounded-full transition"
+                        style={{ backgroundColor: item.isAvailable ? '#658051' : '#E8ECE4' }}
+                      >
+                        <span
+                          className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                          style={{ transform: item.isAvailable ? 'translateX(24px)' : 'translateX(4px)' }}
+                        />
                       </button>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => openEdit(item)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 transition font-medium">
+                        <button
+                          onClick={() => openEdit(item)}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
+                          style={{ border: '1px solid #E8ECE4', color: '#658051', backgroundColor: 'transparent' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#EDF1EA'; e.currentTarget.style.borderColor = '#c8d8c0'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = '#E8ECE4'; }}
+                        >
                           Edit
                         </button>
-                        <button onClick={() => setDeleteConfirm(item.id)}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 text-red-500 transition font-medium">
+                        <button
+                          onClick={() => setDeleteConfirm(item.id)}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium transition"
+                          style={{ border: '1px solid #FECACA', color: '#DC2626', backgroundColor: 'transparent' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
                           Hapus
                         </button>
                       </div>
@@ -359,29 +400,41 @@ export default function AdminMenuPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={closeModal} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
-              <h2 className="text-lg font-bold text-gray-800">
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10"
+              style={{ borderColor: '#E8ECE4' }}
+            >
+              <h2 className="text-lg font-bold" style={{ color: '#1C1C1A' }}>
                 {editData ? 'Edit Menu' : 'Tambah Menu Baru'}
               </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button
+                onClick={closeModal}
+                className="text-xl transition"
+                style={{ color: '#9CA38F' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#6B7560'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#9CA38F'}
+              >✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
 
               {/* ── Upload Foto ── */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Foto Menu</label>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#1C1C1A' }}>Foto Menu</label>
                 <div className="flex items-start gap-4">
                   {/* Preview */}
                   <div
-                    className="w-24 h-24 rounded-2xl overflow-hidden bg-orange-50 border-2 border-dashed border-orange-200 flex items-center justify-center flex-shrink-0 cursor-pointer hover:border-orange-400 transition"
+                    className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-dashed flex items-center justify-center flex-shrink-0 cursor-pointer transition"
+                    style={{ backgroundColor: '#EDF1EA', borderColor: '#c8d8c0' }}
                     onClick={() => fileInputRef.current?.click()}
+                    onMouseEnter={(e) => e.currentTarget.style.borderColor = '#658051'}
+                    onMouseLeave={(e) => e.currentTarget.style.borderColor = '#c8d8c0'}
                   >
                     {imagePreview ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="text-center text-gray-400 p-2">
+                      <div className="text-center p-2" style={{ color: '#9CA38F' }}>
                         <p className="text-3xl">📷</p>
                         <p className="text-xs mt-1">Pilih foto</p>
                       </div>
@@ -393,11 +446,14 @@ export default function AdminMenuPage() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="text-sm px-3 py-2 rounded-xl border border-orange-300 text-orange-600 hover:bg-orange-50 transition font-medium w-full"
+                      className="text-sm px-3 py-2 rounded-xl font-medium w-full transition"
+                      style={{ border: '1px solid #c8d8c0', color: '#658051', backgroundColor: 'transparent' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDF1EA'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       {imagePreview ? '🔄 Ganti Foto' : '📁 Pilih Foto'}
                     </button>
-                    <p className="text-xs text-gray-400 mt-2">JPG, PNG, WebP · Maks 5MB</p>
+                    <p className="text-xs mt-2" style={{ color: '#9CA38F' }}>JPG, PNG, WebP · Maks 5MB</p>
                     {imageFile && (
                       <p className="text-xs text-green-600 mt-1 truncate">✓ {imageFile.name}</p>
                     )}
@@ -405,7 +461,10 @@ export default function AdminMenuPage() {
                       <button
                         type="button"
                         onClick={() => { setImagePreview(null); setImageFile(null); }}
-                        className="text-xs text-red-500 hover:text-red-600 mt-1 underline"
+                        className="text-xs mt-1 underline"
+                        style={{ color: '#DC2626' }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                       >
                         Hapus foto
                       </button>
@@ -420,7 +479,7 @@ export default function AdminMenuPage() {
                   onChange={handleImageChange}
                 />
                 {!editData && (
-                  <p className="text-xs text-gray-400 mt-1.5">
+                  <p className="text-xs mt-1.5" style={{ color: '#9CA38F' }}>
                     💡 Foto bisa juga diupload nanti dengan klik ikon gambar di tabel
                   </p>
                 )}
@@ -428,33 +487,39 @@ export default function AdminMenuPage() {
 
               {/* Nama */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Menu *</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: '#1C1C1A' }}>Nama Menu *</label>
                 <input
                   type="text"
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="contoh: Kopi Susu Carra"
-                  className="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+                  style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                 />
               </div>
 
               {/* Deskripsi */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: '#1C1C1A' }}>Deskripsi</label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder="Opsional — deskripsi singkat menu"
                   rows={2}
-                  className="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none resize-none"
+                  style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                 />
               </div>
 
               {/* Harga + Kategori */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp) *</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#1C1C1A' }}>Harga (Rp) *</label>
                   <input
                     type="number"
                     required
@@ -462,15 +527,21 @@ export default function AdminMenuPage() {
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
                     placeholder="25000"
-                    className="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+                    style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kategori *</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#1C1C1A' }}>Kategori *</label>
                   <select
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white"
+                    className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none bg-white"
+                    style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                   >
                     {CATEGORIES.map((c) => (
                       <option key={c.value} value={c.value}>
@@ -483,9 +554,9 @@ export default function AdminMenuPage() {
 
               {/* Stok */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium mb-1" style={{ color: '#1C1C1A' }}>
                   Stok
-                  <span className="text-xs text-gray-400 font-normal ml-1">(kosongkan = unlimited ∞)</span>
+                  <span className="text-xs font-normal ml-1" style={{ color: '#6B7560' }}>(kosongkan = unlimited ∞)</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -494,16 +565,25 @@ export default function AdminMenuPage() {
                     value={form.stock}
                     onChange={(e) => setForm({ ...form, stock: e.target.value })}
                     placeholder="∞ Unlimited"
-                    className="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                    className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+                    style={{ borderColor: '#E8ECE4', color: '#1C1C1A' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                   />
                   {form.stock !== '' && (
-                    <button type="button" onClick={() => setForm({ ...form, stock: '' })}
-                      className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, stock: '' })}
+                      className="text-xs whitespace-nowrap transition"
+                      style={{ color: '#9CA38F' }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = '#6B7560'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = '#9CA38F'}
+                    >
                       Reset ∞
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>
                   💡 Stok 0 = menu otomatis ditandai tidak tersedia
                 </p>
               </div>
@@ -511,28 +591,42 @@ export default function AdminMenuPage() {
               {/* Toggle tersedia */}
               <div className="flex items-center justify-between py-2">
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Tersedia</p>
-                  <p className="text-xs text-gray-400">Menu akan tampil di halaman customer</p>
+                  <p className="text-sm font-medium" style={{ color: '#1C1C1A' }}>Tersedia</p>
+                  <p className="text-xs" style={{ color: '#9CA38F' }}>Menu akan tampil di halaman customer</p>
                 </div>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => setForm({ ...form, isAvailable: !form.isAvailable })}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                    form.isAvailable ? 'bg-green-500' : 'bg-gray-300'
-                  }`}>
-                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                    form.isAvailable ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
+                  className="relative inline-flex h-6 w-11 items-center rounded-full transition"
+                  style={{ backgroundColor: form.isAvailable ? '#658051' : '#E8ECE4' }}
+                >
+                  <span
+                    className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
+                    style={{ transform: form.isAvailable ? 'translateX(24px)' : 'translateX(4px)' }}
+                  />
                 </button>
               </div>
 
               {/* Tombol */}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeModal}
-                  className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-50 transition">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm transition"
+                  style={{ border: '1px solid #E8ECE4', color: '#6B7560', backgroundColor: 'transparent' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F7F7F5'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
                   Batal
                 </button>
-                <button type="submit" disabled={isSaving}
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl font-semibold text-sm transition disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 text-white py-2.5 rounded-xl font-semibold text-sm transition disabled:opacity-50"
+                  style={{ backgroundColor: '#658051' }}
+                  onMouseEnter={(e) => !isSaving && (e.currentTarget.style.backgroundColor = '#4d6340')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#658051')}
+                >
                   {isSaving ? 'Menyimpan...' : editData ? 'Simpan Perubahan' : 'Tambah Menu'}
                 </button>
               </div>
@@ -547,18 +641,25 @@ export default function AdminMenuPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
             <div className="text-4xl mb-3">⚠️</div>
-            <h3 className="text-lg font-bold text-gray-800 mb-1">Hapus Menu?</h3>
-            <p className="text-sm text-gray-500 mb-6">
+            <h3 className="text-lg font-bold mb-1" style={{ color: '#1C1C1A' }}>Hapus Menu?</h3>
+            <p className="text-sm mb-6" style={{ color: '#6B7560' }}>
               Menu <strong>{menu.find((m) => m.id === deleteConfirm)?.name}</strong> akan dihapus permanen.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)}
-                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-50 transition">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl font-semibold text-sm transition"
+                style={{ border: '1px solid #E8ECE4', color: '#6B7560', backgroundColor: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F7F7F5'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
                 Batal
               </button>
-              <button onClick={() => deleteMutation.mutate(deleteConfirm)}
+              <button
+                onClick={() => deleteMutation.mutate(deleteConfirm)}
                 disabled={deleteMutation.isPending}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold text-sm transition disabled:opacity-50">
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold text-sm transition disabled:opacity-50"
+              >
                 {deleteMutation.isPending ? 'Menghapus...' : 'Ya, Hapus'}
               </button>
             </div>
@@ -572,18 +673,27 @@ export default function AdminMenuPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setUploadTarget(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-800">📷 Foto Menu</h2>
-              <button onClick={() => setUploadTarget(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <h2 className="text-lg font-bold" style={{ color: '#1C1C1A' }}>📷 Foto Menu</h2>
+              <button
+                onClick={() => setUploadTarget(null)}
+                className="text-xl transition"
+                style={{ color: '#9CA38F' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#6B7560'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#9CA38F'}
+              >✕</button>
             </div>
 
             {/* Preview */}
             <div className="flex justify-center mb-4">
-              <div className="w-32 h-32 rounded-2xl overflow-hidden bg-orange-50 border-2 border-dashed border-orange-200 flex items-center justify-center">
+              <div
+                className="w-32 h-32 rounded-2xl overflow-hidden border-2 border-dashed flex items-center justify-center"
+                style={{ backgroundColor: '#EDF1EA', borderColor: '#c8d8c0' }}
+              >
                 {uploadTarget.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={uploadTarget.imageUrl} alt={uploadTarget.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="text-center text-gray-400">
+                  <div className="text-center" style={{ color: '#9CA38F' }}>
                     <p className="text-4xl">{getCategoryInfo(uploadTarget.category).emoji}</p>
                     <p className="text-xs mt-1">Belum ada foto</p>
                   </div>
@@ -591,14 +701,19 @@ export default function AdminMenuPage() {
               </div>
             </div>
 
-            <p className="text-center text-sm font-medium text-gray-700 mb-4">{uploadTarget.name}</p>
+            <p className="text-center text-sm font-medium mb-4" style={{ color: '#1C1C1A' }}>{uploadTarget.name}</p>
 
             {/* Input file */}
             <label className="block w-full cursor-pointer">
-              <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-orange-300 hover:bg-orange-50 transition">
+              <div
+                className="border-2 border-dashed rounded-xl p-4 text-center transition"
+                style={{ borderColor: '#E8ECE4' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.backgroundColor = '#EDF1EA'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+              >
                 <p className="text-2xl mb-1">📁</p>
-                <p className="text-sm font-medium text-gray-600">Klik untuk pilih foto</p>
-                <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WebP · Maks 5MB</p>
+                <p className="text-sm font-medium" style={{ color: '#6B7560' }}>Klik untuk pilih foto</p>
+                <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>JPG, PNG, WebP · Maks 5MB</p>
               </div>
               <input
                 type="file"
@@ -612,8 +727,8 @@ export default function AdminMenuPage() {
             </label>
 
             {uploadMutation.isPending && (
-              <div className="mt-3 flex items-center justify-center gap-2 text-orange-500 text-sm">
-                <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+              <div className="mt-3 flex items-center justify-center gap-2 text-sm" style={{ color: '#658051' }}>
+                <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#658051', borderTopColor: 'transparent' }} />
                 <span>Mengupload foto...</span>
               </div>
             )}
@@ -623,7 +738,10 @@ export default function AdminMenuPage() {
               <button
                 onClick={() => deleteImageMutation.mutate(uploadTarget.id)}
                 disabled={deleteImageMutation.isPending}
-                className="w-full mt-3 text-sm text-red-500 hover:text-red-600 border border-red-200 hover:bg-red-50 py-2 rounded-xl transition"
+                className="w-full mt-3 text-sm py-2 rounded-xl transition"
+                style={{ color: '#DC2626', border: '1px solid #FECACA', backgroundColor: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 {deleteImageMutation.isPending ? 'Menghapus...' : '🗑️ Hapus foto'}
               </button>
