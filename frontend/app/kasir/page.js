@@ -113,38 +113,41 @@ export default function KasirPage() {
   return (
     <StaffLayout>
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+      {/* Header — hidden on mobile (top bar sudah ada di StaffLayout) */}
+      <div className="hidden lg:flex bg-white border-b px-6 py-4 items-center justify-between sticky top-0 z-10 shadow-sm">
         <div>
           <h1 className="text-xl font-bold text-gray-800">🖥️ Dashboard Kasir</h1>
           <p className="text-sm text-gray-400">Update status pesanan secara real-time</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-xs text-gray-400">Pendapatan hari ini</p>
-            <p className="text-lg font-bold text-green-600">{formatRupiah(todayRevenue)}</p>
-          </div>
+        <div className="text-right">
+          <p className="text-xs text-gray-400">Pendapatan hari ini</p>
+          <p className="text-lg font-bold text-green-600">{formatRupiah(todayRevenue)}</p>
         </div>
       </div>
+      {/* Pendapatan mobile */}
+      <div className="lg:hidden bg-white border-b px-4 py-2 flex items-center justify-between">
+        <p className="text-xs text-gray-400">Pendapatan hari ini</p>
+        <p className="text-sm font-bold text-green-600">{formatRupiah(todayRevenue)}</p>
+      </div>
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-3 px-6 py-4">
+      {/* Stats bar — 2 kolom di mobile, 4 di tablet+ */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 px-3 sm:px-6 py-3 sm:py-4">
         {['pending', 'preparing', 'ready', 'done'].map((s) => (
-          <div key={s} className={`rounded-xl p-3 border text-center cursor-pointer transition hover:scale-105 ${STATUS_CONFIG[s].color}`}
+          <div key={s} className={`rounded-xl p-2.5 sm:p-3 border text-center cursor-pointer transition active:scale-95 hover:scale-105 ${STATUS_CONFIG[s].color}`}
             onClick={() => setActiveFilter(s === activeFilter ? 'semua' : s)}>
-            <p className="text-2xl font-bold">{counts[s] || 0}</p>
+            <p className="text-xl sm:text-2xl font-bold">{counts[s] || 0}</p>
             <p className="text-xs font-medium mt-0.5">{STATUS_CONFIG[s].label}</p>
           </div>
         ))}
       </div>
 
-      {/* Filter bar */}
-      <div className="px-6 pb-3 flex gap-2 flex-wrap">
+      {/* Filter bar — scroll horizontal di mobile */}
+      <div className="px-3 sm:px-6 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
         {/* Filter status */}
-        <div className="flex gap-1.5 bg-white rounded-xl p-1 shadow-sm border">
+        <div className="flex gap-1 sm:gap-1.5 bg-white rounded-xl p-1 shadow-sm border shrink-0">
           {FILTER_TABS.map((tab) => (
             <button key={tab} onClick={() => setActiveFilter(tab)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition whitespace-nowrap ${
                 activeFilter === tab ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-100'
               }`}>
               {tab === 'semua' ? 'Semua' : STATUS_CONFIG[tab]?.label}
@@ -157,14 +160,14 @@ export default function KasirPage() {
 
         {/* Filter lantai */}
         {floors.length > 1 && (
-          <div className="flex gap-1.5 bg-white rounded-xl p-1 shadow-sm border">
+          <div className="flex gap-1 sm:gap-1.5 bg-white rounded-xl p-1 shadow-sm border shrink-0">
             <button onClick={() => setActiveFloor('semua')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeFloor === 'semua' ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeFloor === 'semua' ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
               Semua lantai
             </button>
             {floors.map((f) => (
               <button key={f} onClick={() => setActiveFloor(String(f))}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeFloor === String(f) ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${activeFloor === String(f) ? 'bg-orange-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
                 Lantai {f}
               </button>
             ))}
@@ -173,7 +176,7 @@ export default function KasirPage() {
       </div>
 
       {/* Order list */}
-      <div className="px-6 pb-8 space-y-3">
+      <div className="px-3 sm:px-6 pb-8 space-y-3">
         {isLoading ? (
           <div className="text-center py-16 text-gray-400">
             <div className="text-4xl mb-2 animate-spin">⏳</div>

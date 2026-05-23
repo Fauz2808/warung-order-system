@@ -89,7 +89,7 @@ export default function LaporanPage() {
     : null;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-800">📊 Laporan Penjualan</h1>
@@ -159,7 +159,7 @@ export default function LaporanPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           icon="💰" label="Pendapatan Hari Ini"
           value={loadingSummary ? '...' : formatRupiah(summary?.revenue || 0)}

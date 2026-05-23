@@ -92,25 +92,25 @@ export default function DapurPage() {
     <StaffLayout>
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header dapur — gelap, mudah dibaca dari jauh */}
-      <div className="bg-gray-800 px-6 py-4 flex items-center justify-between border-b border-gray-700">
+      <div className="bg-gray-800 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between border-b border-gray-700">
         <div>
-          <h1 className="text-2xl font-bold">👨‍🍳 Dapur</h1>
-          <p className="text-gray-400 text-sm">Order aktif yang perlu disiapkan</p>
+          <h1 className="text-xl sm:text-2xl font-bold">👨‍🍳 Dapur</h1>
+          <p className="text-gray-400 text-xs sm:text-sm">Order aktif yang perlu disiapkan</p>
         </div>
-        <div className="flex gap-4 text-center">
-          <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl px-4 py-2">
-            <p className="text-2xl font-bold text-yellow-400">{orders.length}</p>
+        <div className="flex gap-2 sm:gap-4 text-center">
+          <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-xl px-3 sm:px-4 py-2">
+            <p className="text-xl sm:text-2xl font-bold text-yellow-400">{orders.length}</p>
             <p className="text-xs text-yellow-300">Menunggu</p>
           </div>
-          <div className="bg-blue-500/20 border border-blue-500/30 rounded-xl px-4 py-2">
-            <p className="text-2xl font-bold text-blue-400">{preparing.length}</p>
+          <div className="bg-blue-500/20 border border-blue-500/30 rounded-xl px-3 sm:px-4 py-2">
+            <p className="text-xl sm:text-2xl font-bold text-blue-400">{preparing.length}</p>
             <p className="text-xs text-blue-300">Diproses</p>
           </div>
         </div>
       </div>
 
       {/* Order grid */}
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         {isLoading ? (
           <div className="text-center py-20 text-gray-500">
             <div className="text-5xl mb-3">⏳</div>

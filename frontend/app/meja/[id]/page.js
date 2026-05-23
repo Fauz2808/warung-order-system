@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getTable, getMenu, createOrder } from '@/lib/api';
+import { getTable, getMenu, createOrder, getSettings } from '@/lib/api';
 import useCartStore from '@/store/cartStore';
 
 // Format harga ke Rupiah
@@ -38,6 +38,13 @@ export default function MejaPage() {
     queryFn: getMenu,
   });
 
+  // Ambil status buka/tutup warung
+  const { data: shopSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+    refetchInterval: 60000, // cek ulang tiap 1 menit
+  });
+
   // Set meja ke store saat data table tersedia
   useEffect(() => {
     if (table) setTable(table.id, table.number);
@@ -52,8 +59,9 @@ export default function MejaPage() {
       setShowCart(false);
       toast.success('Pesanan berhasil dikirim! 🎉');
     },
-    onError: () => {
-      toast.error('Gagal mengirim pesanan. Coba lagi.');
+    onError: (err) => {
+      const msg = err.response?.data?.message || 'Gagal mengirim pesanan. Coba lagi.';
+      toast.error(msg);
     },
   });
 
@@ -99,6 +107,33 @@ export default function MejaPage() {
 
   if (loadingTable) return <LoadingScreen />;
   if (tableError) return <ErrorScreen message="Meja tidak ditemukan. Cek kembali QR code kamu." />;
+
+  // Warung tutup — tampilkan halaman khusus
+  if (shopSettings && !shopSettings.isOpen) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center">
+          <div className="text-6xl mb-4">🌙</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Warung Tutup</h2>
+          <p className="text-gray-500 mb-4">
+            {shopSettings.isForceClose
+              ? 'Warung sedang tutup sementara. Mohon maaf atas ketidaknyamanannya.'
+              : 'Maaf, kami sedang tidak beroperasi saat ini.'}
+          </p>
+          <div className="bg-orange-50 rounded-2xl p-4 mb-6">
+            <p className="text-sm text-gray-500 mb-1">Jam Operasional</p>
+            <p className="text-2xl font-bold text-orange-500">
+              {shopSettings.openTime} – {shopSettings.closeTime}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">WIB (setiap hari)</p>
+          </div>
+          <p className="text-sm text-gray-400">
+            Halaman akan otomatis refresh saat warung buka 🍜
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Layar sukses setelah order
   if (orderSuccess) {
@@ -252,7 +287,12 @@ function MenuCard({ item, quantity, onAdd, onRemove, needsTempChoice }) {
             </span>
           )}
           {!item.isAvailable && (
-            <span className="text-xs bg-red-50 text-red-400 rounded-full px-2 py-0.5">Habis</span>
+            <span className="text-xs bg-red-50 text-red-500 border border-red-100 rounded-full px-2 py-0.5 font-medium">❌ Habis</span>
+          )}
+          {item.isAvailable && item.stock !== null && item.stock <= 5 && item.stock > 0 && (
+            <span className="text-xs bg-orange-50 text-orange-500 border border-orange-100 rounded-full px-2 py-0.5 font-medium">
+              Sisa {item.stock}
+            </span>
           )}
         </div>
         {item.description && (

@@ -15,6 +15,10 @@ export const getMenuByCategory = (category) =>
 export const createMenu = (data) => api.post('/menu', data).then((r) => r.data);
 export const updateMenu = (id, data) => api.put(`/menu/${id}`, data).then((r) => r.data);
 export const deleteMenu = (id) => api.delete(`/menu/${id}`).then((r) => r.data);
+export const adjustStock = (id, payload) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.patch(`/menu/${id}/stock`, payload, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
 export const uploadMenuImage = (id, file) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
   const formData = new FormData();
@@ -74,6 +78,13 @@ export const exportReport = async (start, end) => {
   a.download = `laporan_carra_${start}_sd_${end}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+};
+
+// ─── Settings ─────────────────────────────────────────
+export const getSettings    = () => api.get('/settings').then((r) => r.data.data);
+export const updateSettings = (data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.put('/settings', data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
 };
 
 export default api;

@@ -4,7 +4,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getMenu, createMenu, updateMenu, deleteMenu, uploadMenuImage, deleteMenuImage } from '@/lib/api';
+import { getMenu, createMenu, updateMenu, deleteMenu, uploadMenuImage, deleteMenuImage, adjustStock } from '@/lib/api';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -24,7 +24,7 @@ const getCategoryInfo = (value) =>
   CATEGORIES.find((c) => c.value === value) || { label: value, emoji: '🍽️', color: 'bg-gray-100 text-gray-600' };
 
 const EMPTY_FORM = {
-  name: '', description: '', price: '', category: 'signature', isAvailable: true,
+  name: '', description: '', price: '', category: 'signature', isAvailable: true, stock: '',
 };
 
 export default function AdminMenuPage() {
@@ -101,6 +101,23 @@ export default function AdminMenuPage() {
     onError: () => toast.error('Gagal mengubah ketersediaan'),
   });
 
+  // Adjust stok (+/-)
+  const stockMutation = useMutation({
+    mutationFn: ({ id, delta }) => adjustStock(id, { delta }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['menu-admin'] });
+      toast.success(`Stok: ${res.data.stock ?? '∞'}`);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal update stok'),
+  });
+
+  // Set stok langsung (dari input)
+  const setStockMutation = useMutation({
+    mutationFn: ({ id, stock }) => adjustStock(id, { stock }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['menu-admin'] }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal set stok'),
+  });
+
   // Upload foto (dari modal foto terpisah)
   const uploadMutation = useMutation({
     mutationFn: ({ id, file }) => uploadMenuImage(id, file),
@@ -139,6 +156,7 @@ export default function AdminMenuPage() {
       price: String(item.price),
       category: item.category,
       isAvailable: item.isAvailable,
+      stock: item.stock !== null && item.stock !== undefined ? String(item.stock) : '',
     });
     setImageFile(null);
     setImagePreview(item.imageUrl || null);
@@ -162,7 +180,11 @@ export default function AdminMenuPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const payload = { ...form, price: parseInt(form.price) };
+    const payload = {
+      ...form,
+      price: parseInt(form.price),
+      stock: form.stock === '' ? null : parseInt(form.stock),
+    };
     if (editData) {
       updateMutation.mutate({ id: editData.id, data: payload });
     } else {
@@ -218,7 +240,7 @@ export default function AdminMenuPage() {
       </div>
 
       {/* Tabel menu */}
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden overflow-x-auto">
         {isLoading ? (
           <div className="p-10 text-center text-gray-400">Memuat menu...</div>
         ) : filtered.length === 0 ? (
@@ -227,13 +249,14 @@ export default function AdminMenuPage() {
             <p>Belum ada menu. Klik &quot;Tambah Menu&quot; untuk mulai.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 w-14">Foto</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Nama Menu</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Kategori</th>
                 <th className="text-right px-4 py-3 font-semibold text-gray-600">Harga</th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">Stok</th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-600">Tersedia</th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-600">Aksi</th>
               </tr>
@@ -275,6 +298,30 @@ export default function AdminMenuPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-700">
                       {formatRupiah(item.price)}
+                    </td>
+                    {/* Kolom stok */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => stockMutation.mutate({ id: item.id, delta: -1 })}
+                          disabled={item.stock === null || item.stock === 0}
+                          className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm flex items-center justify-center disabled:opacity-30 transition"
+                        >−</button>
+                        <span className={`w-10 text-center text-sm font-semibold ${
+                          item.stock === null ? 'text-gray-400' :
+                          item.stock === 0    ? 'text-red-500' :
+                          item.stock <= 5     ? 'text-orange-500' : 'text-gray-700'
+                        }`}>
+                          {item.stock === null ? '∞' : item.stock}
+                        </span>
+                        <button
+                          onClick={() => stockMutation.mutate({ id: item.id, delta: +1 })}
+                          className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-sm flex items-center justify-center transition"
+                        >+</button>
+                      </div>
+                      {item.stock !== null && item.stock === 0 && (
+                        <p className="text-center text-xs text-red-500 mt-0.5">Habis</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button
@@ -432,6 +479,33 @@ export default function AdminMenuPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Stok */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Stok
+                  <span className="text-xs text-gray-400 font-normal ml-1">(kosongkan = unlimited ∞)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.stock}
+                    onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                    placeholder="∞ Unlimited"
+                    className="w-full border rounded-xl px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  {form.stock !== '' && (
+                    <button type="button" onClick={() => setForm({ ...form, stock: '' })}
+                      className="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap">
+                      Reset ∞
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  💡 Stok 0 = menu otomatis ditandai tidak tersedia
+                </p>
               </div>
 
               {/* Toggle tersedia */}
