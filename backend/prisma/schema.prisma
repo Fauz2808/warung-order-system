@@ -15,9 +15,10 @@ model Menu {
   name        String
   description String?
   price       Int         // dalam Rupiah, contoh: 25000
-  category    String      // "makanan" | "minuman"
+  category    String      // "signature" | "coffee" | "americano" | "slow-bar" | "non-coffee" | "foods" | "additional"
   imageUrl    String?
   isAvailable Boolean     @default(true)
+  stock       Int?        // null = unlimited; 0 = habis
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orderItems  OrderItem[]

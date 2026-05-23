@@ -19,6 +19,7 @@ const menuSchema = z.object({
   }),
   imageUrl: z.string().url().optional().or(z.literal('')),
   isAvailable: z.boolean().optional().default(true),
+  stock: z.number().int().min(0).nullable().optional(), // null = unlimited
 });
 
 // GET /api/menu — ambil semua menu yang tersedia
@@ -114,6 +115,47 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Menu tidak ditemukan' });
     }
     res.status(500).json({ success: false, message: 'Gagal menghapus menu' });
+  }
+});
+
+// PATCH /api/menu/:id/stock — tambah atau kurangi stok (butuh auth)
+// Body: { delta: +5 | -3 } atau { stock: 10 } untuk set langsung
+router.patch('/:id/stock', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { delta, stock: newStock } = req.body;
+
+    const menu = await prisma.menu.findUnique({ where: { id } });
+    if (!menu) return res.status(404).json({ success: false, message: 'Menu tidak ditemukan' });
+
+    let updatedStock;
+
+    if (typeof newStock === 'number') {
+      // Set langsung ke nilai tertentu
+      updatedStock = Math.max(0, newStock);
+    } else if (typeof delta === 'number') {
+      // Tambah/kurang dari nilai saat ini
+      const current = menu.stock ?? 0;
+      updatedStock = Math.max(0, current + delta);
+    } else {
+      return res.status(400).json({ success: false, message: 'Sertakan delta atau stock' });
+    }
+
+    // Auto-toggle isAvailable berdasarkan stok
+    const isAvailable = updatedStock > 0 ? menu.isAvailable : false;
+
+    const updated = await prisma.menu.update({
+      where: { id },
+      data: {
+        stock: updatedStock,
+        isAvailable,
+      },
+    });
+
+    res.json({ success: true, data: updated, message: `Stok diperbarui: ${updatedStock}` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Gagal memperbarui stok' });
   }
 });
 

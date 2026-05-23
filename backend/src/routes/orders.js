@@ -113,32 +113,59 @@ router.post('/', async (req, res) => {
 
     const menuMap = Object.fromEntries(menus.map((m) => [m.id, m]));
 
+    // Cek stok mencukupi (stock null = unlimited)
+    for (const item of items) {
+      const menu = menuMap[item.menuId];
+      if (menu.stock !== null && menu.stock < item.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Stok ${menu.name} tidak mencukupi (tersisa ${menu.stock})`,
+        });
+      }
+    }
+
     // Hitung total
     const totalAmount = items.reduce((sum, item) => {
       return sum + menuMap[item.menuId].price * item.quantity;
     }, 0);
 
-    // Buat order + items sekaligus (transaction)
-    const order = await prisma.order.create({
-      data: {
-        tableId,
-        orderType,
-        notes,
-        totalAmount,
-        items: {
-          create: items.map((item) => ({
-            menuId: item.menuId,
-            quantity: item.quantity,
-            price: menuMap[item.menuId].price, // snapshot harga
-            notes: item.notes,
-          })),
+    // Buat order + items + kurangi stok dalam satu transaction
+    const [order] = await prisma.$transaction([
+      prisma.order.create({
+        data: {
+          tableId,
+          orderType,
+          notes,
+          totalAmount,
+          items: {
+            create: items.map((item) => ({
+              menuId: item.menuId,
+              quantity: item.quantity,
+              price: menuMap[item.menuId].price,
+              notes: item.notes,
+            })),
+          },
         },
-      },
-      include: {
-        table: true,
-        items: { include: { menu: true } },
-      },
-    });
+        include: {
+          table: true,
+          items: { include: { menu: true } },
+        },
+      }),
+      // Kurangi stok per menu item (hanya yang punya stock != null)
+      ...items
+        .filter((item) => menuMap[item.menuId].stock !== null)
+        .map((item) => {
+          const newStock = Math.max(0, menuMap[item.menuId].stock - item.quantity);
+          return prisma.menu.update({
+            where: { id: item.menuId },
+            data: {
+              stock: newStock,
+              // Auto-unavailable kalau stok habis
+              ...(newStock === 0 ? { isAvailable: false } : {}),
+            },
+          });
+        }),
+    ]);
 
     // Update status meja jadi occupied
     await prisma.table.update({
