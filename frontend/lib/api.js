@@ -58,4 +58,22 @@ export const getChart    = (range) => api.get(`/reports/chart?range=${range}`, {
 export const getTopMenu  = () => api.get('/reports/top-menu', { headers: authHeader() }).then((r) => r.data.data);
 export const getHourly   = () => api.get('/reports/hourly',   { headers: authHeader() }).then((r) => r.data.data);
 
+// Export laporan sebagai CSV — trigger browser download
+export const exportReport = async (start, end) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  const params = new URLSearchParams({ start, end });
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/reports/export?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) throw new Error('Gagal mengekspor data');
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `laporan_carra_${start}_sd_${end}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default api;

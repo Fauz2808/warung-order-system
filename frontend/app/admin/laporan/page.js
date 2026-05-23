@@ -8,7 +8,12 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts';
-import { getSummary, getChart, getTopMenu, getHourly } from '@/lib/api';
+import toast from 'react-hot-toast';
+import { getSummary, getChart, getTopMenu, getHourly, exportReport } from '@/lib/api';
+
+// Format YYYY-MM-DD untuk input date
+const toDateInput = (date) => date.toISOString().split('T')[0];
+const today = new Date();
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -25,6 +30,9 @@ const CATEGORY_COLORS = { makanan: '#f97316', minuman: '#3b82f6' };
 
 export default function LaporanPage() {
   const [chartRange, setChartRange] = useState(7);
+  const [exportStart, setExportStart] = useState(toDateInput(today));
+  const [exportEnd,   setExportEnd]   = useState(toDateInput(today));
+  const [exporting,   setExporting]   = useState(false);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['summary'],
@@ -49,6 +57,32 @@ export default function LaporanPage() {
     refetchInterval: 60000,
   });
 
+  // Preset tanggal untuk export
+  const setPreset = (days) => {
+    const end   = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - (days - 1));
+    setExportStart(toDateInput(start));
+    setExportEnd(toDateInput(end));
+  };
+
+  // Handle export CSV
+  const handleExport = async () => {
+    if (exportStart > exportEnd) {
+      toast.error('Tanggal mulai tidak boleh lebih dari tanggal akhir');
+      return;
+    }
+    setExporting(true);
+    try {
+      await exportReport(exportStart, exportEnd);
+      toast.success('Laporan berhasil didownload!');
+    } catch {
+      toast.error('Gagal mengekspor laporan');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Hitung peak hour
   const peakHour = hourly.length
     ? hourly.reduce((max, h) => (h.orders > max.orders ? h : max), hourly[0])
@@ -62,6 +96,66 @@ export default function LaporanPage() {
         <p className="text-sm text-gray-500 mt-1">
           Data hari ini · {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
+      </div>
+
+      {/* Export Card */}
+      <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <h2 className="font-bold text-gray-800 mb-1">📥 Export Laporan</h2>
+            <p className="text-xs text-gray-400">Download data order ke file CSV (bisa dibuka di Excel)</p>
+          </div>
+
+          {/* Preset buttons */}
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { label: 'Hari ini',    days: 1 },
+              { label: '7 hari',      days: 7 },
+              { label: '30 hari',     days: 30 },
+            ].map((p) => (
+              <button key={p.days} onClick={() => setPreset(p.days)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Date range */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 shrink-0">Dari</label>
+              <input
+                type="date"
+                value={exportStart}
+                max={exportEnd}
+                onChange={(e) => setExportStart(e.target.value)}
+                className="border rounded-xl px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 shrink-0">s/d</label>
+              <input
+                type="date"
+                value={exportEnd}
+                min={exportStart}
+                max={toDateInput(today)}
+                onChange={(e) => setExportEnd(e.target.value)}
+                className="border rounded-xl px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl font-semibold text-sm transition disabled:opacity-50"
+            >
+              {exporting ? (
+                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Mengekspor...</>
+              ) : (
+                <>⬇️ Download CSV</>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards */}
