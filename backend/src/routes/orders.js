@@ -91,6 +91,31 @@ router.post('/', async (req, res) => {
 
     const { tableId, orderType, notes, items } = parsed.data;
 
+    // Cek jam operasional warung
+    const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+    if (settings) {
+      const { openTime, closeTime, isForceClose } = settings;
+      if (isForceClose) {
+        return res.status(403).json({ success: false, message: 'Warung sedang tutup. Silakan datang kembali saat jam operasional.' });
+      }
+      // Cek jam WIB
+      const now = new Date();
+      const wibMinutes = ((now.getUTCHours() * 60 + now.getUTCMinutes()) + 7 * 60) % (24 * 60);
+      const [oh, om] = openTime.split(':').map(Number);
+      const [ch, cm] = closeTime.split(':').map(Number);
+      const openMin  = oh * 60 + om;
+      const closeMin = ch * 60 + cm;
+      const isOpen   = openMin <= closeMin
+        ? wibMinutes >= openMin && wibMinutes < closeMin
+        : wibMinutes >= openMin || wibMinutes < closeMin;
+      if (!isOpen) {
+        return res.status(403).json({
+          success: false,
+          message: `Warung tutup. Jam buka ${openTime}–${closeTime} WIB.`,
+        });
+      }
+    }
+
     // Cek meja ada
     const table = await prisma.table.findUnique({ where: { id: tableId } });
     if (!table) {

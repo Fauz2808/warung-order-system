@@ -47,6 +47,15 @@ model Order {
   items       OrderItem[]
 }
 
+// Pengaturan warung — singleton (id selalu 1)
+model Settings {
+  id           Int      @id @default(1)
+  openTime     String   @default("08:00")   // format "HH:mm"
+  closeTime    String   @default("22:00")   // format "HH:mm"
+  isForceClose Boolean  @default(false)     // tutup paksa (override jam)
+  updatedAt    DateTime @updatedAt
+}
+
 model OrderItem {
   id       Int     @id @default(autoincrement())
   orderId  Int
