@@ -7,7 +7,8 @@ import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { getTables, createTable, deleteTable } from '@/lib/api';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(':3000', ':3001') || 'http://localhost:3001';
+// Gunakan origin browser saat ini — selalu benar di dev maupun production
+const BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
 
 export default function AdminMejaPage() {
   const queryClient = useQueryClient();
