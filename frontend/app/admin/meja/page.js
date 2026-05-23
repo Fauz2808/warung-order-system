@@ -1,10 +1,10 @@
 'use client';
 // app/admin/meja/page.js — kelola meja + lihat QR code
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { getTables, createTable, deleteTable } from '@/lib/api';
 
 // Gunakan origin browser saat ini — selalu benar di dev maupun production
@@ -13,7 +13,44 @@ const BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http:
 export default function AdminMejaPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showQR, setShowQR] = useState(null);   // data meja yang QR-nya ditampilkan
+  const [showQR, setShowQR] = useState(null);
+  const qrRef = useRef(null);
+
+  const handleDownloadQR = () => {
+    const canvas = qrRef.current?.querySelector('canvas');
+    if (!canvas) return;
+
+    // Buat canvas baru dengan padding & label meja
+    const padding = 24;
+    const labelH  = 48;
+    const out = document.createElement('canvas');
+    out.width  = canvas.width  + padding * 2;
+    out.height = canvas.height + padding * 2 + labelH;
+
+    const ctx = out.getContext('2d');
+    // Background putih
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+
+    // QR code
+    ctx.drawImage(canvas, padding, padding);
+
+    // Label "Meja X — Carra Coffee"
+    ctx.fillStyle = '#1C1C1A';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      `Meja ${showQR.number} · Lantai ${showQR.floor} · Carra Coffee`,
+      out.width / 2,
+      canvas.height + padding + labelH / 2 + 4,
+    );
+
+    const link = document.createElement('a');
+    link.download = `qr-meja-${showQR.number}.png`;
+    link.href = out.toDataURL('image/png');
+    link.click();
+    toast.success(`QR Meja ${showQR.number} berhasil didownload!`);
+  };
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [form, setForm] = useState({ number: '', floor: '1' });
   const [filterFloor, setFilterFloor] = useState('semua');
@@ -182,8 +219,8 @@ export default function AdminMejaPage() {
             <p className="text-sm mb-6" style={{ color: '#9CA38F' }}>Lantai {showQR.floor}</p>
 
             {/* QR Code */}
-            <div className="flex justify-center mb-4 p-4 bg-white rounded-2xl border-2" style={{ borderColor: '#E8ECE4' }}>
-              <QRCodeSVG
+            <div ref={qrRef} className="flex justify-center mb-4 p-4 bg-white rounded-2xl border-2" style={{ borderColor: '#E8ECE4' }}>
+              <QRCodeCanvas
                 value={`${BASE_URL}/meja/${showQR.id}`}
                 size={180}
                 level="M"
@@ -193,14 +230,24 @@ export default function AdminMejaPage() {
 
             <p className="text-xs mb-1" style={{ color: '#9CA38F' }}>URL yang di-encode:</p>
             <p
-              className="text-xs font-mono rounded-lg px-3 py-2 break-all"
+              className="text-xs font-mono rounded-lg px-3 py-2 break-all mb-4"
               style={{ color: '#658051', backgroundColor: '#EDF1EA' }}
             >
               {BASE_URL}/meja/{showQR.id}
             </p>
 
-            <p className="text-xs mt-4" style={{ color: '#9CA38F' }}>
-              Screenshot atau print QR ini dan tempel di meja {showQR.number}
+            {/* Tombol Download */}
+            <button
+              onClick={handleDownloadQR}
+              className="w-full py-3 rounded-2xl font-semibold text-sm text-white transition flex items-center justify-center gap-2"
+              style={{ backgroundColor: '#658051' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4d6340'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#658051'}
+            >
+              ⬇️ Download QR Code
+            </button>
+            <p className="text-xs mt-3" style={{ color: '#9CA38F' }}>
+              Print dan tempel di meja {showQR.number}
             </p>
           </div>
         </div>
