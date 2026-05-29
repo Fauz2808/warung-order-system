@@ -91,7 +91,7 @@ model OrderItem {
   order    Order   @relation(fields: [orderId], references: [id])
   menuId   Int?    // nullable — null jika menu sudah dihapus
   menu     Menu?   @relation(fields: [menuId], references: [id])
-  menuName String  // snapshot nama menu saat order dibuat
+  menuName String  @default("")  // snapshot nama menu saat order dibuat
   quantity Int
   price    Int     // snapshot harga saat order dibuat
   notes    String? // catatan per item, contoh: "tidak pakai pedas"
