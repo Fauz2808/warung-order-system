@@ -27,6 +27,53 @@ const STATUS_CONFIG = {
   cancelled: { label: 'Dibatalkan', color: 'bg-red-50 text-red-500 border-red-200',        dot: 'bg-red-400',    next: null,        nextLabel: null },
 };
 
+// ─── Notification sound via Web Audio API ─────────────
+function playOrderSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [
+      { freq: 880,  start: 0,    dur: 0.25 },
+      { freq: 1100, start: 0.18, dur: 0.25 },
+      { freq: 1320, start: 0.36, dur: 0.35 },
+    ];
+    notes.forEach(({ freq, start, dur }) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.05);
+    });
+  } catch (_) {}
+}
+
+// ─── Browser Notification ──────────────────────────────
+function showBrowserNotif(order) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const notif = new Notification('🛎️ Order Baru Masuk!', {
+    body: `Meja ${order.table?.number} · ${formatRupiah(order.totalAmount)} · ${order.items?.length} item`,
+    icon: '/favicon.ico',
+    tag: `order-${order.id}`,
+  });
+  setTimeout(() => notif.close(), 8000);
+}
+
+// ─── Tab title flash ───────────────────────────────────
+let flashInterval = null;
+function flashTabTitle(count = 6) {
+  clearInterval(flashInterval);
+  const original = document.title;
+  let i = 0;
+  flashInterval = setInterval(() => {
+    document.title = i % 2 === 0 ? '🛎️ Order Baru!' : original;
+    if (++i >= count * 2) { clearInterval(flashInterval); document.title = original; }
+  }, 600);
+}
+
 export default function KasirPage() {
   const { user, loading, logout } = useAuth(); // proteksi halaman
   const router = useRouter();
@@ -34,7 +81,17 @@ export default function KasirPage() {
   const [activeFloor, setActiveFloor] = useState('semua');
   const [activePayment, setActivePayment] = useState('semua'); // semua | unpaid | paid
   const [activeType, setActiveType] = useState('semua'); // semua | dine-in | take-away
+  const [notifPermission, setNotifPermission] = useState('default');
   const queryClient = useQueryClient();
+
+  // Cek & minta permission notifikasi saat pertama kali load
+  useEffect(() => {
+    if (!('Notification' in window)) return;
+    setNotifPermission(Notification.permission);
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then((p) => setNotifPermission(p));
+    }
+  }, []);
 
   // Semua hooks harus dipanggil sebelum early return
   const { data: orders = [], isLoading } = useQuery({
@@ -55,17 +112,20 @@ export default function KasirPage() {
     // Order baru masuk dari customer
     socket.on('order:new', (newOrder) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      playOrderSound();
+      showBrowserNotif(newOrder);
+      flashTabTitle(8);
       toast.custom((t) => (
         <div className={`bg-white rounded-2xl shadow-lg p-4 flex gap-3 items-start max-w-sm ${t.visible ? 'animate-enter' : 'animate-leave'}`}
-          style={{ border: '1px solid #E8ECE4' }}>
+          style={{ border: '2px solid #658051' }}>
           <div className="text-2xl">🛎️</div>
           <div>
             <p className="font-bold" style={{ color: '#1C1C1A' }}>Order Baru Masuk!</p>
             <p className="text-sm" style={{ color: '#6B7560' }}>Meja {newOrder.table?.number} — {formatRupiah(newOrder.totalAmount)}</p>
-            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>{newOrder.items?.length} item</p>
+            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>{newOrder.items?.length} item · #{newOrder.id}</p>
           </div>
         </div>
-      ), { duration: 6000 });
+      ), { duration: 8000 });
     });
 
     // Status order diupdate
@@ -160,6 +220,30 @@ export default function KasirPage() {
           </button>
         </div>
       </div>
+
+      {/* Banner izin notifikasi */}
+      {notifPermission !== 'granted' && (
+        <div className="px-4 lg:px-6 py-2.5 flex items-center justify-between gap-3"
+          style={{ background: notifPermission === 'denied' ? '#FEF2F2' : '#FFF8EC', borderBottom: '1px solid #E8ECE4' }}>
+          <div className="flex items-center gap-2 text-sm">
+            <span>{notifPermission === 'denied' ? '🔕' : '🔔'}</span>
+            <span style={{ color: notifPermission === 'denied' ? '#DC2626' : '#92660A' }}>
+              {notifPermission === 'denied'
+                ? 'Notifikasi diblokir — aktifkan di pengaturan browser untuk terima alert order baru'
+                : 'Izinkan notifikasi agar dapat alert order baru saat tab tidak aktif'}
+            </span>
+          </div>
+          {notifPermission === 'default' && (
+            <button
+              onClick={() => Notification.requestPermission().then((p) => setNotifPermission(p))}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition"
+              style={{ background: '#F59E0B', color: '#fff' }}
+            >
+              Izinkan
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Pendapatan mobile */}
       <div className="lg:hidden bg-white border-b px-4 py-2 flex items-center justify-between"
