@@ -84,20 +84,4 @@ router.put('/change-password', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/auth/cleanup — hapus semua order data (one-time)
-router.post('/cleanup', async (req, res) => {
-  try {
-    const { secret } = req.body;
-    if (secret !== 'carra-cleanup-2024') {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
-    }
-    await prisma.orderItem.deleteMany();
-    await prisma.order.deleteMany();
-    await prisma.table.updateMany({ data: { isOccupied: false } });
-    res.json({ success: true, message: 'Semua order berhasil dihapus, meja direset' });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
 module.exports = router;
