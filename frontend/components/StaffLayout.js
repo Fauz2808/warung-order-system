@@ -7,18 +7,20 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
-const navItems = [
-  { href: '/kasir',            label: 'Kasir',       icon: '🖥️',  desc: 'Terima & update pesanan' },
-  { href: '/dapur',            label: 'Dapur',        icon: '👨‍🍳', desc: 'Antrian masak' },
-  { href: '/admin/menu',       label: 'Kelola Menu',  icon: '🍽️',  desc: 'Tambah / edit menu' },
-  { href: '/admin/meja',       label: 'Kelola Meja',  icon: '🪑',  desc: 'Manage meja & QR Code' },
-  { href: '/admin/laporan',    label: 'Laporan',      icon: '📊',  desc: 'Ringkasan penjualan' },
-  { href: '/admin/pengaturan', label: 'Pengaturan',   icon: '⚙️',  desc: 'Jam buka & tutup' },
+const ALL_NAV = [
+  { href: '/kasir',            label: 'Kasir',        icon: '🖥️',  desc: 'Terima & update pesanan', roles: ['owner','kasir'] },
+  { href: '/admin/menu',       label: 'Kelola Menu',  icon: '🍽️',  desc: 'Tambah / edit menu',      roles: ['owner','kasir'] },
+  { href: '/admin/meja',       label: 'Kelola Meja',  icon: '🪑',  desc: 'Manage meja & QR Code',   roles: ['owner','kasir'] },
+  { href: '/admin/laporan',    label: 'Laporan',      icon: '📊',  desc: 'Ringkasan penjualan',      roles: ['owner'] },
+  { href: '/admin/pengaturan', label: 'Pengaturan',   icon: '⚙️',  desc: 'Jam buka & tutup',        roles: ['owner'] },
 ];
 
 export default function StaffLayout({ children }) {
   const pathname  = usePathname();
   const { user, logout } = useAuth();
+
+  // Filter nav berdasarkan role — kasir hanya lihat item yang diizinkan
+  const navItems = ALL_NAV.filter((item) => !user?.role || item.roles.includes(user.role));
   const [open, setOpen] = useState(false); // mobile drawer
   const [collapsed, setCollapsed] = useState(false); // desktop collapsed
 
@@ -144,9 +146,11 @@ export default function StaffLayout({ children }) {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold truncate" style={{ color: '#1C1C1A' }}>
-                  {user?.username || 'Staff'}
+                  {user?.name || user?.username || 'Staff'}
                 </p>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>Sedang login</p>
+                <p className="text-xs" style={{ color: user?.role === 'owner' ? '#92660A' : '#9CA38F' }}>
+                  {user?.role === 'owner' ? '👑 Owner' : '🧑‍💼 Kasir'}
+                </p>
               </div>
             </div>
             <div className="space-y-0.5">

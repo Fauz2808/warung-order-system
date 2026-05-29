@@ -9,22 +9,26 @@ const router = express.Router();
 
 // Validasi order baru dari customer
 const createOrderSchema = z.object({
-  tableId: z.number().int().positive('tableId wajib diisi'),
-  orderType: z.enum(['dine-in', 'take-away']).default('dine-in'),
-  notes: z.string().optional(),
+  tableId:      z.number().int().positive('tableId wajib diisi'),
+  orderType:    z.enum(['dine-in', 'take-away']).default('dine-in'),
+  notes:        z.string().optional(),
+  customerName: z.string().optional(),       // nama customer (opsional)
+  isPaid:       z.boolean().default(false),  // bayar sekarang = true
   items: z
     .array(
       z.object({
         menuId: z.number().int().positive(),
         quantity: z.number().int().min(1, 'Quantity minimal 1'),
         notes: z.string().optional(),
+        additionalEspressoShots: z.number().int().min(0).optional().default(0),
+        additionalEspressoPrice: z.number().int().min(0).optional().default(0),
       })
     )
     .min(1, 'Order harus punya minimal 1 item'),
 });
 
 const updateStatusSchema = z.object({
-  status: z.enum(['pending', 'preparing', 'ready', 'done', 'cancelled'], {
+  status: z.enum(['pending', 'preparing', 'done', 'cancelled'], {
     errorMap: () => ({ message: 'Status tidak valid' }),
   }),
 });
@@ -89,7 +93,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { tableId, orderType, notes, items } = parsed.data;
+    const { tableId, orderType, notes, customerName, isPaid, items } = parsed.data;
 
     // Cek jam operasional warung
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
@@ -151,7 +155,9 @@ router.post('/', async (req, res) => {
 
     // Hitung total
     const totalAmount = items.reduce((sum, item) => {
-      return sum + menuMap[item.menuId].price * item.quantity;
+      const basePrice = menuMap[item.menuId].price;
+      const espressoExtra = (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0);
+      return sum + (basePrice + espressoExtra) * item.quantity;
     }, 0);
 
     // Buat order + items + kurangi stok dalam satu transaction
@@ -161,13 +167,18 @@ router.post('/', async (req, res) => {
           tableId,
           orderType,
           notes,
+          customerName: customerName || null,
+          isPaid,
           totalAmount,
           items: {
             create: items.map((item) => ({
               menuId: item.menuId,
+              menuName: menuMap[item.menuId].name,
               quantity: item.quantity,
               price: menuMap[item.menuId].price,
               notes: item.notes,
+              additionalEspressoShots: item.additionalEspressoShots || 0,
+              additionalEspressoPrice: item.additionalEspressoPrice || 0,
             })),
           },
         },
@@ -259,6 +270,42 @@ router.put('/:id/status', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
     }
     res.status(500).json({ success: false, message: 'Gagal memperbarui status order' });
+  }
+});
+
+// PATCH /api/orders/:id/mark-paid — tandai order sudah lunas (kasir)
+// Body: { notes: "..." } — opsional, untuk catat metode bayar
+router.patch('/:id/mark-paid', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { notes } = req.body; // opsional: "[Bayar Cash: Rp50.000, Kembalian: Rp0]"
+
+    const existing = await prisma.order.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+    }
+
+    const updateData = { isPaid: true };
+    // Append catatan pembayaran ke notes yang sudah ada
+    if (notes) {
+      updateData.notes = existing.notes
+        ? `${existing.notes} · ${notes}`
+        : notes;
+    }
+
+    const order = await prisma.order.update({
+      where: { id },
+      data: updateData,
+      include: { table: true, items: { include: { menu: true } } },
+    });
+
+    if (req.io) {
+      req.io.emit('order:paid', { orderId: id, order });
+    }
+
+    res.json({ success: true, data: order, message: 'Order ditandai sudah lunas' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Gagal memperbarui status bayar' });
   }
 });
 

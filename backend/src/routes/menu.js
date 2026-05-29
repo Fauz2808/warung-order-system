@@ -14,12 +14,13 @@ const menuSchema = z.object({
   name: z.string().min(1, 'Nama menu wajib diisi'),
   description: z.string().optional(),
   price: z.number().int().positive('Harga harus lebih dari 0'),
-  category: z.enum(['signature', 'coffee', 'americano', 'slow-bar', 'non-coffee', 'foods', 'additional', 'makanan', 'minuman'], {
-    errorMap: () => ({ message: 'Kategori tidak valid' }),
-  }),
+  category: z.string().min(1, 'Kategori wajib diisi'),
   imageUrl: z.string().url().optional().or(z.literal('')),
   isAvailable: z.boolean().optional().default(true),
   stock: z.number().int().min(0).nullable().optional(), // null = unlimited
+  hasTemperatureOption: z.boolean().optional().default(false),
+  hasAdditionalEspresso: z.boolean().optional().default(false),
+  additionalEspressoPrice: z.number().int().min(0).optional().default(3000),
 });
 
 // GET /api/menu — ambil semua menu yang tersedia
@@ -105,9 +106,17 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/menu/:id — hapus menu (kasir/admin)
+// menuId di OrderItem nullable — riwayat order tetap ada via snapshot menuName
 router.delete('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+
+    // Set menuId = null pada order items lama sebelum hapus menu
+    await prisma.orderItem.updateMany({
+      where: { menuId: id },
+      data: { menuId: null },
+    });
+
     await prisma.menu.delete({ where: { id } });
     res.json({ success: true, message: 'Menu berhasil dihapus' });
   } catch (error) {

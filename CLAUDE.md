@@ -258,18 +258,28 @@ npm run build                # build untuk production
 
 | Halaman | URL | Fitur |
 |---|---|---|
-| Customer | `/meja/[id]` | Scan QR, pilih menu, keranjang, order |
+| Customer | `/meja/[id]` | Scan QR, pilih menu, keranjang, order, tracking status, invoice |
 | Kasir | `/kasir` | Real-time order, filter status/lantai, update status |
-| Dapur | `/dapur` | Order aktif, timer, tombol cepat |
-| Admin Menu | `/admin/menu` | CRUD menu, toggle ketersediaan |
-| Admin Meja | `/admin/meja` | Tambah/hapus meja, lihat QR code |
+| Admin Menu | `/admin/menu` | CRUD menu, toggle ketersediaan, badge fitur Hot/Ice & Espresso Shot |
+| Admin Meja | `/admin/meja` | Tambah/hapus meja, lihat QR code (kasir & owner) |
+| Login | `/login` | Auth JWT, role-based redirect |
+| Pengaturan | `/admin/pengaturan` | Jam buka/tutup, kelola akun kasir (owner only) |
+| Laporan | `/admin/laporan` | Ringkasan penjualan, grafik, export CSV (owner only) |
+
+## Fitur Tambahan Phase 1 (sudah selesai)
+- ✅ Role leveling: **Owner** (full access) vs **Kasir** (akses terbatas)
+- ✅ Kelola akun kasir dari halaman Pengaturan (CRUD user, owner only)
+- ✅ Customer order tracking real-time: Diterima → Diproses → Siap
+- ✅ Invoice customer muncul saat pesanan selesai
+- ✅ Socket.IO reconnect + 10s polling fallback (handle tab suspension)
+- ✅ QR code download sebagai PNG dengan label meja
+- ✅ Kategori menu dinamis dari database
+- ✅ Fitur menu: pilih Hot/Ice, tambah Espresso Shot, quick notes
 
 ## Phase 2 — Belum Dikerjakan
 - [ ] Payment Midtrans (QRIS + Virtual Account)
 - [ ] Upload foto menu (Cloudinary)
-- [ ] Laporan penjualan harian/mingguan dengan grafik (Recharts)
-- [ ] Auth login kasir (JWT)
-- [ ] Deploy ke Vercel + Railway
+- [ ] Deploy ke Vercel + Railway (sudah pernah deploy, perlu update)
 
 ---
 

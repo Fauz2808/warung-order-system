@@ -5,9 +5,21 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ⚠️  LOCAL DEV: provider = "sqlite"
+// ⚠️  PRODUCTION (Railway): ganti ke provider = "postgresql"
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+// Kategori menu — bisa di-CRUD oleh kasir/admin
+model Category {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique   // "coffee", "teh-susu" — dipakai di Menu.category
+  label     String             // "Coffee", "Teh Susu" — nama tampilan, bisa diubah
+  emoji     String   @default("☕")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 }
 
 model Menu {
@@ -19,6 +31,9 @@ model Menu {
   imageUrl    String?
   isAvailable Boolean     @default(true)
   stock       Int?        // null = unlimited; 0 = habis
+  hasTemperatureOption Boolean @default(false)  // true = tampilkan opsi Hot/Ice
+  hasAdditionalEspresso  Boolean @default(false)   // toggle additional espresso shot
+  additionalEspressoPrice Int    @default(3000)     // harga per shot dalam Rupiah
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orderItems  OrderItem[]
@@ -34,17 +49,31 @@ model Table {
 }
 
 model Order {
-  id          Int         @id @default(autoincrement())
-  tableId     Int
-  table       Table       @relation(fields: [tableId], references: [id])
-  status      String      @default("pending")
-  // status: "pending" | "preparing" | "ready" | "done" | "cancelled"
-  orderType   String      @default("dine-in")  // "dine-in" | "take-away"
-  totalAmount Int         // total harga dalam Rupiah
-  notes       String?     // catatan tambahan dari customer
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  items       OrderItem[]
+  id           Int         @id @default(autoincrement())
+  tableId      Int
+  table        Table       @relation(fields: [tableId], references: [id])
+  status       String      @default("pending")
+  // status: "pending" | "preparing" | "done" | "cancelled"
+  orderType    String      @default("dine-in")  // "dine-in" | "take-away"
+  totalAmount  Int         // total harga dalam Rupiah
+  notes        String?     // catatan tambahan dari customer
+  customerName String?     // nama customer, opsional (diisi kasir)
+  isPaid       Boolean     @default(false)  // false = belum bayar, true = sudah lunas
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        OrderItem[]
+}
+
+// User — kasir & owner
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String   // bcrypt hash
+  role      String   @default("kasir")  // "owner" | "kasir"
+  name      String?  // nama tampilan (opsional)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Pengaturan warung — singleton (id selalu 1)
@@ -60,9 +89,12 @@ model OrderItem {
   id       Int     @id @default(autoincrement())
   orderId  Int
   order    Order   @relation(fields: [orderId], references: [id])
-  menuId   Int
-  menu     Menu    @relation(fields: [menuId], references: [id])
+  menuId   Int?    // nullable — null jika menu sudah dihapus
+  menu     Menu?   @relation(fields: [menuId], references: [id])
+  menuName String  // snapshot nama menu saat order dibuat
   quantity Int
   price    Int     // snapshot harga saat order dibuat
   notes    String? // catatan per item, contoh: "tidak pakai pedas"
+  additionalEspressoShots Int @default(0)   // jumlah shot yang dipesan
+  additionalEspressoPrice Int @default(0)   // snapshot harga per shot saat order
 }

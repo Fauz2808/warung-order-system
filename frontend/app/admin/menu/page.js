@@ -4,27 +4,16 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getMenu, createMenu, updateMenu, deleteMenu, uploadMenuImage, deleteMenuImage, adjustStock } from '@/lib/api';
+import { getMenu, createMenu, updateMenu, deleteMenu, uploadMenuImage, deleteMenuImage, adjustStock,
+         getCategories, createCategory, updateCategory, deleteCategory } from '@/lib/api';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
-// Semua kategori Carra Coffee
-const CATEGORIES = [
-  { value: 'signature',   label: 'Signature',   emoji: '⭐', color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'coffee',      label: 'Coffee',       emoji: '☕', color: 'bg-amber-100 text-amber-700' },
-  { value: 'americano',   label: 'Americano',    emoji: '🫖', color: 'bg-orange-100 text-orange-700' },
-  { value: 'slow-bar',    label: 'Slow Bar',     emoji: '🔬', color: 'bg-purple-100 text-purple-700' },
-  { value: 'non-coffee',  label: 'Non Coffee',   emoji: '🧋', color: 'bg-green-100 text-green-700' },
-  { value: 'foods',       label: 'Foods',        emoji: '🍟', color: 'bg-red-100 text-red-700' },
-  { value: 'additional',  label: 'Extra Shot',   emoji: '➕', color: 'bg-gray-100 text-gray-700' },
-];
-
-const getCategoryInfo = (value) =>
-  CATEGORIES.find((c) => c.value === value) || { label: value, emoji: '🍽️', color: 'bg-gray-100 text-gray-600' };
-
 const EMPTY_FORM = {
-  name: '', description: '', price: '', category: 'signature', isAvailable: true, stock: '',
+  name: '', description: '', price: '', category: '', isAvailable: true, stock: '', hasTemperatureOption: false,
+  hasAdditionalEspresso: false,
+  additionalEspressoPrice: 3000,
 };
 
 export default function AdminMenuPage() {
@@ -35,6 +24,7 @@ export default function AdminMenuPage() {
   const [filterCat, setFilterCat] = useState('semua');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [uploadTarget, setUploadTarget] = useState(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   // State untuk gambar di form Tambah/Edit
   const [imageFile, setImageFile] = useState(null);
@@ -45,6 +35,17 @@ export default function AdminMenuPage() {
     queryKey: ['menu-admin'],
     queryFn: getMenu,
   });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: getCategories,
+  });
+
+  // Helper: info kategori by slug
+  const getCategoryInfo = (slug) => {
+    const cat = categories.find((c) => c.slug === slug);
+    return cat ? { label: cat.label, emoji: cat.emoji, color: 'bg-gray-100 text-gray-700' } : { label: slug, emoji: '🍽️', color: 'bg-gray-100 text-gray-600' };
+  };
 
   // Tambah menu baru
   const createMutation = useMutation({
@@ -91,7 +92,10 @@ export default function AdminMenuPage() {
       toast.success('Menu berhasil dihapus');
       setDeleteConfirm(null);
     },
-    onError: () => toast.error('Gagal menghapus menu'),
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Gagal menghapus menu');
+      setDeleteConfirm(null);
+    },
   });
 
   // Toggle ketersediaan
@@ -100,6 +104,7 @@ export default function AdminMenuPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['menu-admin'] }),
     onError: () => toast.error('Gagal mengubah ketersediaan'),
   });
+
 
   // Adjust stok (+/-)
   const stockMutation = useMutation({
@@ -142,7 +147,7 @@ export default function AdminMenuPage() {
 
   const openAdd = () => {
     setEditData(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, category: categories[0]?.slug || '' });
     setImageFile(null);
     setImagePreview(null);
     setShowModal(true);
@@ -157,6 +162,9 @@ export default function AdminMenuPage() {
       category: item.category,
       isAvailable: item.isAvailable,
       stock: item.stock !== null && item.stock !== undefined ? String(item.stock) : '',
+      hasTemperatureOption: item.hasTemperatureOption || false,
+      hasAdditionalEspresso: item.hasAdditionalEspresso || false,
+      additionalEspressoPrice: item.additionalEspressoPrice || 3000,
     });
     setImageFile(null);
     setImagePreview(item.imageUrl || null);
@@ -195,8 +203,8 @@ export default function AdminMenuPage() {
   const filtered = filterCat === 'semua' ? menu : menu.filter((m) => m.category === filterCat);
 
   // Hitung per kategori untuk badge
-  const counts = CATEGORIES.reduce((acc, c) => {
-    acc[c.value] = menu.filter((m) => m.category === c.value).length;
+  const counts = categories.reduce((acc, c) => {
+    acc[c.slug] = menu.filter((m) => m.category === c.slug).length;
     return acc;
   }, {});
 
@@ -209,19 +217,29 @@ export default function AdminMenuPage() {
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#1C1C1A' }}>🍽️ Kelola Menu</h1>
           <p className="text-sm mt-1" style={{ color: '#6B7560' }}>
-            {menu.length} menu ·{' '}
-            {CATEGORIES.filter((c) => counts[c.value] > 0).map((c) => `${counts[c.value]} ${c.label.toLowerCase()}`).join(' · ')}
+            {menu.length} menu · {categories.length} kategori
           </p>
         </div>
-        <button
-          onClick={openAdd}
-          className="text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2"
-          style={{ backgroundColor: '#658051' }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4d6340'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#658051'}
-        >
-          <span>+</span> Tambah Menu
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            className="px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2 border"
+            style={{ backgroundColor: '#FFFFFF', color: '#658051', borderColor: '#658051' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EDF1EA'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+          >
+            ⚙️ Kategori
+          </button>
+          <button
+            onClick={openAdd}
+            className="text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2"
+            style={{ backgroundColor: '#658051' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4d6340'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#658051'}
+          >
+            <span>+</span> Tambah Menu
+          </button>
+        </div>
       </div>
 
       {/* Filter kategori */}
@@ -237,19 +255,19 @@ export default function AdminMenuPage() {
         >
           Semua ({menu.length})
         </button>
-        {CATEGORIES.map((cat) => (
-          counts[cat.value] > 0 && (
+        {categories.map((cat) => (
+          counts[cat.slug] > 0 && (
             <button
-              key={cat.value}
-              onClick={() => setFilterCat(cat.value)}
+              key={cat.slug}
+              onClick={() => setFilterCat(cat.slug)}
               className="px-4 py-1.5 rounded-full text-sm font-medium transition"
               style={
-                filterCat === cat.value
+                filterCat === cat.slug
                   ? { backgroundColor: '#658051', color: '#FFFFFF', border: '1px solid #658051' }
                   : { backgroundColor: '#FFFFFF', color: '#6B7560', border: '1px solid #E8ECE4' }
               }
             >
-              {cat.emoji} {cat.label} ({counts[cat.value]})
+              {cat.emoji} {cat.label} ({counts[cat.slug]})
             </button>
           )
         ))}
@@ -265,13 +283,14 @@ export default function AdminMenuPage() {
             <p>Belum ada menu. Klik &quot;Tambah Menu&quot; untuk mulai.</p>
           </div>
         ) : (
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm min-w-[780px]">
             <thead className="border-b" style={{ backgroundColor: '#F7F7F5', borderColor: '#E8ECE4' }}>
               <tr>
                 <th className="text-left px-4 py-3 font-semibold w-14" style={{ color: '#6B7560' }}>Foto</th>
                 <th className="text-left px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Nama Menu</th>
                 <th className="text-left px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Kategori</th>
                 <th className="text-right px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Harga</th>
+                <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Fitur</th>
                 <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Stok</th>
                 <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Tersedia</th>
                 <th className="text-center px-4 py-3 font-semibold" style={{ color: '#6B7560' }}>Aksi</th>
@@ -321,6 +340,29 @@ export default function AdminMenuPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-semibold" style={{ color: '#1C1C1A' }}>
                       {formatRupiah(item.price)}
+                    </td>
+                    {/* Kolom Fitur — Hot/Ice & Espresso Shot (info only) */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1.5 items-center">
+                        {/* Badge Hot/Ice */}
+                        <span
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                          style={item.hasTemperatureOption
+                            ? { background: '#EDF1EA', color: '#658051', border: '1.5px solid #c8d8c0' }
+                            : { background: '#F7F7F5', color: '#C4C9BD', border: '1.5px solid #E8ECE4' }}
+                        >
+                          🌡️ Hot/Ice
+                        </span>
+                        {/* Badge Espresso Shot */}
+                        <span
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                          style={item.hasAdditionalEspresso
+                            ? { background: '#FFF8EC', color: '#92660A', border: '1.5px solid #F59E0B' }
+                            : { background: '#F7F7F5', color: '#C4C9BD', border: '1.5px solid #E8ECE4' }}
+                        >
+                          ☕{item.hasAdditionalEspresso ? ` +${formatRupiah(item.additionalEspressoPrice || 3000)}` : ' Shot'}
+                        </span>
+                      </div>
                     </td>
                     {/* Kolom stok */}
                     <td className="px-4 py-3">
@@ -543,8 +585,8 @@ export default function AdminMenuPage() {
                     onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
                     onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c.value} value={c.value}>
+                    {categories.map((c) => (
+                      <option key={c.slug} value={c.slug}>
                         {c.emoji} {c.label}
                       </option>
                     ))}
@@ -586,6 +628,76 @@ export default function AdminMenuPage() {
                 <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>
                   💡 Stok 0 = menu otomatis ditandai tidak tersedia
                 </p>
+              </div>
+
+              {/* Toggle Hot/Ice — hanya untuk non-food */}
+              <div className="flex items-center justify-between py-2">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>Opsi Suhu (Hot / Ice)</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>Aktifkan untuk minuman yang bisa Hot atau Ice</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, hasTemperatureOption: !f.hasTemperatureOption }))}
+                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0"
+                  style={{ background: form.hasTemperatureOption ? '#658051' : '#D1D5DB' }}>
+                  <span
+                    className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                    style={{ transform: form.hasTemperatureOption ? 'translateX(22px)' : 'translateX(2px)' }} />
+                </button>
+              </div>
+
+              {/* Toggle Additional Espresso */}
+              <div>
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>Additional Espresso Shot</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>Customer bisa tambah shot espresso dengan biaya extra</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, hasAdditionalEspresso: !f.hasAdditionalEspresso }))}
+                    className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0"
+                    style={{ background: form.hasAdditionalEspresso ? '#658051' : '#D1D5DB' }}>
+                    <span
+                      className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                      style={{ transform: form.hasAdditionalEspresso ? 'translateX(22px)' : 'translateX(2px)' }} />
+                  </button>
+                </div>
+                {/* Input harga — hanya muncul jika toggle aktif */}
+                {form.hasAdditionalEspresso && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Harga per Shot</p>
+                    {/* Quick fill buttons */}
+                    <div className="flex gap-2">
+                      {[2000, 3000, 5000].map((price) => (
+                        <button
+                          key={price}
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, additionalEspressoPrice: price }))}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition"
+                          style={form.additionalEspressoPrice === price
+                            ? { borderColor: '#658051', background: '#EDF1EA', color: '#658051' }
+                            : { borderColor: '#E8ECE4', background: '#FAFAF8', color: '#6B7560' }}>
+                          Rp {price.toLocaleString('id-ID')}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Manual input */}
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold" style={{ color: '#9CA38F' }}>Rp</span>
+                      <input
+                        type="number"
+                        value={form.additionalEspressoPrice}
+                        onChange={(e) => setForm((f) => ({ ...f, additionalEspressoPrice: parseInt(e.target.value) || 0 }))}
+                        className="w-full pl-10 pr-4 py-2 rounded-xl text-sm outline-none border"
+                        style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FAFAF8' }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Toggle tersedia */}
@@ -749,6 +861,274 @@ export default function AdminMenuPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Kelola Kategori */}
+      {showCategoryModal && (
+        <CategoryModal
+          categories={categories}
+          onClose={() => setShowCategoryModal(false)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            queryClient.invalidateQueries({ queryKey: ['menu-admin'] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Modal Kelola Kategori ────────────────────────────────────
+function CategoryModal({ categories, onClose, onSaved }) {
+  const [editTarget, setEditTarget]   = useState(null); // { id, label, emoji } | null
+  const [showAdd, setShowAdd]         = useState(false);
+  const [addForm, setAddForm]         = useState({ label: '', emoji: '☕' });
+  const [editForm, setEditForm]       = useState({ label: '', emoji: '☕' });
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const queryClient = useQueryClient();
+
+  const EMOJI_QUICK = ['☕','🍵','🧋','🥤','🍹','🫖','🍟','🍔','🥗','🍰','🍩','🧁','⭐','➕','🔬','🌿','🍊','🫐','🥛','💧'];
+
+  const createMutation = useMutation({
+    mutationFn: createCategory,
+    onSuccess: () => {
+      toast.success('Kategori ditambahkan!');
+      setAddForm({ label: '', emoji: '☕' });
+      setShowAdd(false);
+      onSaved();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal menambahkan kategori'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => updateCategory(id, data),
+    onSuccess: () => {
+      toast.success('Kategori diperbarui!');
+      setEditTarget(null);
+      onSaved();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal memperbarui kategori'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCategory,
+    onSuccess: () => {
+      toast.success('Kategori dihapus!');
+      setDeleteConfirm(null);
+      onSaved();
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal menghapus kategori'),
+  });
+
+  const startEdit = (cat) => {
+    setEditTarget(cat);
+    setEditForm({ label: cat.label, emoji: cat.emoji });
+    setShowAdd(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        style={{ maxHeight: '90vh' }}>
+
+        {/* Header */}
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: '#E8ECE4' }}>
+          <div>
+            <h3 className="font-bold text-base" style={{ color: '#1C1C1A' }}>⚙️ Kelola Kategori</h3>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{categories.length} kategori · klik Edit untuk ubah nama/emoji</p>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
+            style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+        </div>
+
+        <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 70px)' }}>
+          <div className="p-4 space-y-2">
+
+            {/* List kategori */}
+            {categories.map((cat) => (
+              <div key={cat.id}>
+                {editTarget?.id === cat.id ? (
+                  /* ── Mode Edit ── */
+                  <div className="rounded-2xl border-2 p-4 space-y-3" style={{ borderColor: '#658051', background: '#FAFFF8' }}>
+                    <p className="text-xs font-semibold" style={{ color: '#658051' }}>
+                      Edit kategori <span className="font-bold">&quot;{cat.label}&quot;</span>
+                      <span className="ml-2 px-1.5 py-0.5 rounded text-xs" style={{ background: '#EDF1EA', color: '#9CA38F' }}>
+                        slug: {cat.slug}
+                      </span>
+                    </p>
+                    {/* Input nama */}
+                    <div>
+                      <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7560' }}>Nama Kategori</label>
+                      <input
+                        type="text"
+                        value={editForm.label}
+                        onChange={(e) => setEditForm({ ...editForm, label: e.target.value })}
+                        className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                        style={{ border: '1.5px solid #658051', color: '#1C1C1A' }}
+                        autoFocus
+                      />
+                    </div>
+                    {/* Pilih emoji */}
+                    <div>
+                      <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#6B7560' }}>Emoji</label>
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {EMOJI_QUICK.map((em) => (
+                          <button key={em}
+                            onClick={() => setEditForm({ ...editForm, emoji: em })}
+                            className="w-9 h-9 rounded-xl text-lg transition"
+                            style={{
+                              background: editForm.emoji === em ? '#EDF1EA' : '#F7F7F5',
+                              border: `2px solid ${editForm.emoji === em ? '#658051' : 'transparent'}`,
+                            }}>
+                            {em}
+                          </button>
+                        ))}
+                        <input type="text" value={editForm.emoji}
+                          onChange={(e) => setEditForm({ ...editForm, emoji: e.target.value })}
+                          className="w-14 rounded-xl text-center text-lg outline-none border"
+                          style={{ border: '1.5px solid #E8ECE4' }}
+                          placeholder="🎯" maxLength={4} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditTarget(null)}
+                        className="flex-1 py-2 rounded-xl text-sm border font-medium"
+                        style={{ borderColor: '#E8ECE4', color: '#6B7560' }}>Batal</button>
+                      <button
+                        onClick={() => updateMutation.mutate({ id: cat.id, data: { label: editForm.label, emoji: editForm.emoji, sortOrder: cat.sortOrder } })}
+                        disabled={!editForm.label.trim() || updateMutation.isPending}
+                        className="flex-1 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40"
+                        style={{ background: '#658051' }}>
+                        {updateMutation.isPending ? 'Menyimpan...' : 'Simpan'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Mode Normal ── */
+                  <div className="flex items-center justify-between px-4 py-3 rounded-2xl border transition"
+                    style={{ border: '1.5px solid #E8ECE4', background: '#FAFAF8' }}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{cat.emoji}</span>
+                      <div>
+                        <p className="font-semibold text-sm" style={{ color: '#1C1C1A' }}>{cat.label}</p>
+                        <p className="text-xs" style={{ color: '#9CA38F' }}>slug: {cat.slug}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => startEdit(cat)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition"
+                        style={{ borderColor: '#E8ECE4', color: '#658051' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#EDF1EA'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                        ✏️ Edit
+                      </button>
+                      <button onClick={() => setDeleteConfirm(cat)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition"
+                        style={{ borderColor: '#FECACA', color: '#DC2626' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Form Tambah Kategori Baru */}
+            {showAdd ? (
+              <div className="rounded-2xl border-2 p-4 space-y-3 mt-2" style={{ borderColor: '#658051', background: '#FAFFF8' }}>
+                <p className="text-xs font-semibold" style={{ color: '#658051' }}>Tambah Kategori Baru</p>
+                <div>
+                  <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7560' }}>Nama Kategori</label>
+                  <input
+                    type="text"
+                    value={addForm.label}
+                    onChange={(e) => setAddForm({ ...addForm, label: e.target.value })}
+                    placeholder="contoh: Teh, Jus, Milkshake..."
+                    className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                    style={{ border: '1.5px solid #658051', color: '#1C1C1A' }}
+                    autoFocus
+                  />
+                  {addForm.label && (
+                    <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>
+                      Slug: <span className="font-mono">{addForm.label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}</span>
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#6B7560' }}>Emoji</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {EMOJI_QUICK.map((em) => (
+                      <button key={em}
+                        onClick={() => setAddForm({ ...addForm, emoji: em })}
+                        className="w-9 h-9 rounded-xl text-lg transition"
+                        style={{
+                          background: addForm.emoji === em ? '#EDF1EA' : '#F7F7F5',
+                          border: `2px solid ${addForm.emoji === em ? '#658051' : 'transparent'}`,
+                        }}>
+                        {em}
+                      </button>
+                    ))}
+                    <input type="text" value={addForm.emoji}
+                      onChange={(e) => setAddForm({ ...addForm, emoji: e.target.value })}
+                      className="w-14 rounded-xl text-center text-lg outline-none border"
+                      style={{ border: '1.5px solid #E8ECE4' }}
+                      placeholder="🎯" maxLength={4} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowAdd(false); setAddForm({ label: '', emoji: '☕' }); }}
+                    className="flex-1 py-2 rounded-xl text-sm border font-medium"
+                    style={{ borderColor: '#E8ECE4', color: '#6B7560' }}>Batal</button>
+                  <button
+                    onClick={() => createMutation.mutate({ label: addForm.label, emoji: addForm.emoji, sortOrder: categories.length + 1 })}
+                    disabled={!addForm.label.trim() || createMutation.isPending}
+                    className="flex-1 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40"
+                    style={{ background: '#658051' }}>
+                    {createMutation.isPending ? 'Menyimpan...' : '+ Tambah'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setShowAdd(true); setEditTarget(null); }}
+                className="w-full py-3 rounded-2xl text-sm font-semibold border-2 border-dashed transition mt-1"
+                style={{ borderColor: '#C8D8C0', color: '#658051' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#EDF1EA'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                + Tambah Kategori Baru
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Konfirmasi hapus */}
+        {deleteConfirm && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-2xl">
+            <div className="bg-white rounded-2xl shadow-xl p-5 w-72 mx-4">
+              <p className="font-bold mb-1" style={{ color: '#1C1C1A' }}>Hapus Kategori?</p>
+              <p className="text-sm mb-4" style={{ color: '#6B7560' }}>
+                Kategori <strong>{deleteConfirm.emoji} {deleteConfirm.label}</strong> akan dihapus permanen.
+                Menu yang masih pakai kategori ini tidak bisa dihapus.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 py-2 rounded-xl text-sm border font-medium"
+                  style={{ borderColor: '#E8ECE4', color: '#6B7560' }}>Batal</button>
+                <button onClick={() => deleteMutation.mutate(deleteConfirm.id)}
+                  disabled={deleteMutation.isPending}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40"
+                  style={{ background: '#DC2626' }}>
+                  {deleteMutation.isPending ? 'Menghapus...' : 'Hapus'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,8 @@
 
 const express = require('express');
 const prisma = require('../prisma');
-const authMiddleware = require('../middleware/auth');
+const authMiddleware  = require('../middleware/auth');
+const ownerMiddleware = require('../middleware/owner');
 
 const router = express.Router();
 
@@ -59,8 +60,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/settings — butuh auth kasir/admin
-router.put('/', authMiddleware, async (req, res) => {
+// PUT /api/settings — owner only
+router.put('/', authMiddleware, ownerMiddleware, async (req, res) => {
   try {
     const { openTime, closeTime, isForceClose } = req.body;
 

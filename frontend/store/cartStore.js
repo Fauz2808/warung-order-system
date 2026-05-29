@@ -14,23 +14,40 @@ const useCartStore = create((set, get) => ({
   // Tambah item ke keranjang
   addItem: (menu) => {
     const items = get().items;
-    const existing = items.find((i) => i.menuId === menu.id);
+    // Support both menu.id (old) and menu.menuId (new explicit form)
+    const resolvedId = menu.menuId ?? menu.id;
+    const existing = items.find((i) => i.menuId === resolvedId);
     if (existing) {
       // Kalau sudah ada, tambah quantity
       set({
         items: items.map((i) =>
-          i.menuId === menu.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.menuId === resolvedId ? { ...i, quantity: i.quantity + 1 } : i
         ),
       });
     } else {
       set({
         items: [
           ...items,
-          { menuId: menu.id, name: menu.name, price: menu.price, quantity: 1, notes: '' },
+          {
+            menuId: resolvedId,
+            name: menu.name,
+            price: menu.price,
+            quantity: 1,
+            notes: menu.notes || '',
+            hasTemperatureOption: menu.hasTemperatureOption || false,
+            temperature: menu.temperature ?? (menu.hasTemperatureOption ? 'ice' : undefined),
+            hasAdditionalEspresso: menu.hasAdditionalEspresso || false,
+            additionalEspressoShots: menu.additionalEspressoShots || 0,
+            additionalEspressoPrice: menu.additionalEspressoPrice || 0,
+          },
         ],
       });
     }
   },
+
+  // Update pilihan suhu per item (hot / ice)
+  updateTemperature: (menuId, temperature) =>
+    set({ items: get().items.map((i) => (i.menuId === menuId ? { ...i, temperature } : i)) }),
 
   // Kurangi quantity (kalau 0, hapus dari keranjang)
   removeItem: (menuId) => {
@@ -53,8 +70,11 @@ const useCartStore = create((set, get) => ({
   setNotes: (menuId, notes) =>
     set({ items: get().items.map((i) => (i.menuId === menuId ? { ...i, notes } : i)) }),
 
-  // Total harga
-  getTotal: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+  // Total harga (termasuk espresso extra)
+  getTotal: () => get().items.reduce((sum, i) => {
+    const espressoExtra = (i.additionalEspressoShots || 0) * (i.additionalEspressoPrice || 0);
+    return sum + (i.price + espressoExtra) * i.quantity;
+  }, 0),
 
   // Total jumlah item
   getTotalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),

@@ -4,6 +4,8 @@
 const express = require('express');
 const { z } = require('zod');
 const prisma = require('../prisma');
+const authMiddleware  = require('../middleware/auth');
+const ownerMiddleware = require('../middleware/owner');
 
 const router = express.Router();
 
@@ -25,11 +27,13 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/tables/:id — detail satu meja
+// ⚠️  Lookup by table NUMBER (bukan primary key id)
+//     supaya URL /meja/1 = Meja nomor 1, bukan row id=1
 router.get('/:id', async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const number = parseInt(req.params.id);
     const table = await prisma.table.findUnique({
-      where: { id },
+      where: { number },           // ← pakai number (unique field)
       include: {
         // tampilkan order aktif di meja ini
         orders: {
@@ -50,8 +54,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/tables — tambah meja baru
-router.post('/', async (req, res) => {
+// POST /api/tables — tambah meja baru (kasir & owner)
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const parsed = tableSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -72,8 +76,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/tables/:id — hapus meja
-router.delete('/:id', async (req, res) => {
+// DELETE /api/tables/:id — hapus meja (kasir & owner)
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await prisma.table.delete({ where: { id } });

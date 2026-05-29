@@ -1,6 +1,5 @@
 'use client';
 // hooks/useAuth.js
-// Hook untuk cek status login — dipakai di semua halaman yang butuh auth
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -19,28 +18,45 @@ export function useAuth() {
       return;
     }
 
-    // Verifikasi token ke backend
     getMe(token)
       .then((res) => {
         setUser(res.data);
         setLoading(false);
       })
       .catch(() => {
-        // Token tidak valid / kadaluarsa
         localStorage.removeItem('kasir_token');
+        localStorage.removeItem('kasir_role');
+        localStorage.removeItem('kasir_name');
         router.replace('/login');
       });
   }, [router]);
 
   const logout = () => {
     localStorage.removeItem('kasir_token');
+    localStorage.removeItem('kasir_role');
+    localStorage.removeItem('kasir_name');
     router.replace('/login');
   };
 
-  return { user, loading, logout };
+  const isOwner = user?.role === 'owner';
+
+  return { user, loading, logout, isOwner };
 }
 
-// Helper — ambil token dari localStorage
+// useOwnerGuard — redirect kasir yang coba akses halaman owner
+export function useOwnerGuard() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user && user.role !== 'owner') {
+      router.replace('/kasir');
+    }
+  }, [user, loading, router]);
+
+  return { user, loading, isOwner: user?.role === 'owner' };
+}
+
 export function getToken() {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('kasir_token');

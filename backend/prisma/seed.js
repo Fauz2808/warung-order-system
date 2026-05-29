@@ -1,6 +1,7 @@
 // prisma/seed.js
-// Data menu Carra Coffee
+// Data menu Carra Coffee + akun owner
 
+const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -79,6 +80,21 @@ async function main() {
 
   const createdTables = await prisma.table.createMany({ data: tableData });
   console.log(`✅ ${createdTables.count} meja berhasil dibuat\n`);
+
+  // ─── Seed User Owner ─────────────────────────────────────
+  const hashedPassword = await bcrypt.hash('owner123', 10);
+  await prisma.user.upsert({
+    where: { username: 'owner' },
+    update: {},  // jangan overwrite kalau sudah ada
+    create: {
+      username: 'owner',
+      password: hashedPassword,
+      role: 'owner',
+      name: 'Owner Carra Coffee',
+      isActive: true,
+    },
+  });
+  console.log('✅ Akun owner siap  →  username: owner / password: owner123\n');
 
   // ─── Summary ───────────────────────────────────────────
   const counts = {

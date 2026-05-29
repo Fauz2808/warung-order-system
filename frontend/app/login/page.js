@@ -22,7 +22,10 @@ export default function LoginPage() {
     mutationFn: login,
     onSuccess: (res) => {
       localStorage.setItem('kasir_token', res.data.token);
-      toast.success(`Selamat datang, ${res.data.username}! 👋`);
+      localStorage.setItem('kasir_role', res.data.role);
+      localStorage.setItem('kasir_name', res.data.name || res.data.username);
+      const greeting = res.data.role === 'owner' ? '👑' : '👋';
+      toast.success(`Selamat datang, ${res.data.name || res.data.username}! ${greeting}`);
       router.replace('/kasir');
     },
     onError: (err) => {
@@ -206,17 +209,18 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Hint akun default */}
+            {/* Hint akun owner */}
             <div
               className="mt-5 p-3 rounded-xl text-center"
-              style={{ background: '#F7F7F5', border: '1px solid #E8ECE4' }}
+              style={{ background: '#FFF8EC', border: '1px solid #F59E0B' }}
             >
-              <p className="text-xs" style={{ color: '#9CA38F' }}>Akun default:</p>
+              <p className="text-xs font-semibold" style={{ color: '#92660A' }}>👑 Akun Owner:</p>
               <p className="text-xs font-mono mt-0.5" style={{ color: '#6B7560' }}>
-                username: <strong style={{ color: '#1C1C1A' }}>kasir</strong>
+                username: <strong style={{ color: '#1C1C1A' }}>owner</strong>
                 {' · '}
-                password: <strong style={{ color: '#1C1C1A' }}>1234</strong>
+                password: <strong style={{ color: '#1C1C1A' }}>owner123</strong>
               </p>
+              <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>Buat akun kasir di Pengaturan setelah login</p>
             </div>
           </div>
 
