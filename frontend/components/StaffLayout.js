@@ -12,7 +12,7 @@ const ALL_NAV = [
   { href: '/admin/menu',       label: 'Kelola Menu',  icon: '🍽️',  desc: 'Tambah / edit menu',      roles: ['owner','kasir'] },
   { href: '/admin/meja',       label: 'Kelola Meja',  icon: '🪑',  desc: 'Manage meja & QR Code',   roles: ['owner','kasir'] },
   { href: '/admin/laporan',    label: 'Laporan',      icon: '📊',  desc: 'Ringkasan penjualan',      roles: ['owner'] },
-  { href: '/admin/pengaturan', label: 'Pengaturan',   icon: '⚙️',  desc: 'Jam buka & tutup',        roles: ['owner'] },
+  { href: '/admin/pengaturan', label: 'Pengaturan',   icon: '⚙️',  desc: 'Notifikasi & pengaturan', roles: ['owner','kasir'] },
 ];
 
 export default function StaffLayout({ children }) {

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getSettings, updateSettings, getUsers, createUser, updateUser, deleteUser, changePassword } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 
 const EMPTY_USER_FORM  = { username: '', password: '', name: '' };
 const EMPTY_EDIT_FORM  = { name: '', password: '', isActive: true };
@@ -81,6 +82,8 @@ function NotifToggle() {
 }
 
 export default function PengaturanPage() {
+  const { user } = useAuth();
+  const isOwner = user?.role === 'owner';
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ openTime: '08:00', closeTime: '22:00', isForceClose: false });
 
@@ -194,11 +197,13 @@ export default function PengaturanPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold" style={{ color: '#1C1C1A' }}>⚙️ Pengaturan</h1>
-        <p className="text-sm mt-1" style={{ color: '#6B7560' }}>Atur jam operasional dan status warung</p>
+        <p className="text-sm mt-1" style={{ color: '#6B7560' }}>
+          {isOwner ? 'Atur jam operasional dan status warung' : 'Pengaturan notifikasi'}
+        </p>
       </div>
 
-      {/* Status card */}
-      <div
+      {/* Status card — owner only */}
+      {isOwner && <div
         className="rounded-2xl border p-5"
         style={
           isCurrentlyOpen
@@ -252,12 +257,13 @@ export default function PengaturanPage() {
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Notifikasi */}
       <NotifToggle />
 
-      {/* Form jam operasional */}
+      {/* Form jam operasional — owner only */}
+      {isOwner && <>
       <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
         <h2 className="font-bold mb-1" style={{ color: '#1C1C1A' }}>🕐 Jam Operasional</h2>
         <p className="text-xs mb-5" style={{ color: '#9CA38F' }}>
@@ -593,6 +599,7 @@ export default function PengaturanPage() {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }
