@@ -257,13 +257,12 @@ export default function PengaturanPage() {
             </p>
           </div>
         )}
-      </div>}
+      </div>
 
       {/* Notifikasi */}
       <NotifToggle />
 
-      {/* Form jam operasional — owner only */}
-      {isOwner && <>
+      {/* Form jam operasional */}
       <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
         <h2 className="font-bold mb-1" style={{ color: '#1C1C1A' }}>🕐 Jam Operasional</h2>
         <p className="text-xs mb-5" style={{ color: '#9CA38F' }}>
@@ -339,7 +338,8 @@ export default function PengaturanPage() {
         </ul>
       </div>
 
-      {/* ── Kelola Akun ─────────────────────────────────── */}
+      {/* ── Kelola Akun + Ganti Password — owner only ──────── */}
+      {isOwner && <>
       <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-bold" style={{ color: '#1C1C1A' }}>👥 Kelola Akun</h2>
