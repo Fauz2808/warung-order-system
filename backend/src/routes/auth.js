@@ -84,4 +84,25 @@ router.put('/change-password', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/auth/setup — buat akun owner jika belum ada (one-time setup)
+router.post('/setup', async (req, res) => {
+  try {
+    const { secret } = req.body;
+    if (secret !== (process.env.SETUP_SECRET || 'carra-setup-2024')) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    const existing = await prisma.user.findFirst({ where: { role: 'owner' } });
+    if (existing) {
+      return res.json({ success: true, message: 'Akun owner sudah ada', username: existing.username });
+    }
+    const hash = await bcrypt.hash('owner123', 10);
+    const user = await prisma.user.create({
+      data: { username: 'owner', password: hash, role: 'owner', name: 'Owner Carra Coffee', isActive: true },
+    });
+    res.json({ success: true, message: 'Akun owner berhasil dibuat', username: user.username });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
