@@ -47,7 +47,7 @@ export default function StaffLayout({ children }) {
           fixed top-0 left-0 h-screen z-40 flex flex-col
           transition-all duration-300 ease-in-out
           ${open ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:z-auto lg:shadow-sm
+          lg:translate-x-0 lg:sticky lg:top-0 lg:z-auto lg:shadow-sm
           ${collapsed ? 'lg:w-16' : 'lg:w-60'}
           w-64
         `}
