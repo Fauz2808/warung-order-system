@@ -5,10 +5,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ⚠️  LOCAL DEV: provider = "sqlite"
-// ⚠️  PRODUCTION (Railway): ganti ke provider = "postgresql"
+// ⚠️  LOCAL DEV: ganti ke provider = "sqlite"
+// ⚠️  PRODUCTION (Railway): provider = "postgresql"
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
