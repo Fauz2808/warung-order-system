@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getSettings, updateSettings, getUsers, createUser, updateUser, deleteUser, changePassword } from '@/lib/api';
-import { useAuth } from '@/hooks/useAuth';
 
 const EMPTY_USER_FORM  = { username: '', password: '', name: '' };
 const EMPTY_EDIT_FORM  = { name: '', password: '', isActive: true };
@@ -81,9 +80,18 @@ function NotifToggle() {
   );
 }
 
+function getRoleFromToken() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = localStorage.getItem('kasir_token');
+    if (!token) return null;
+    return JSON.parse(atob(token.split('.')[1])).role;
+  } catch { return null; }
+}
+
 export default function PengaturanPage() {
-  const { user } = useAuth();
-  const isOwner = user?.role === 'owner';
+  const [isOwner, setIsOwner] = useState(false);
+  useEffect(() => { setIsOwner(getRoleFromToken() === 'owner'); }, []);
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ openTime: '08:00', closeTime: '22:00', isForceClose: false });
 
