@@ -10,6 +10,76 @@ const EMPTY_USER_FORM  = { username: '', password: '', name: '' };
 const EMPTY_EDIT_FORM  = { name: '', password: '', isActive: true };
 const EMPTY_PW_FORM    = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
+function NotifToggle() {
+  const [permission, setPermission] = useState('default');
+
+  useEffect(() => {
+    if ('Notification' in window) setPermission(Notification.permission);
+  }, []);
+
+  const handleToggle = async () => {
+    if (!('Notification' in window)) {
+      toast.error('Browser kamu tidak mendukung notifikasi');
+      return;
+    }
+    if (permission === 'granted') {
+      toast('Untuk menonaktifkan, ubah di pengaturan browser kamu.', { icon: 'ℹ️' });
+      return;
+    }
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    if (result === 'granted') toast.success('Notifikasi diaktifkan! 🔔');
+    else if (result === 'denied') toast.error('Notifikasi diblokir. Ubah di pengaturan browser.');
+  };
+
+  const isGranted = permission === 'granted';
+  const isDenied  = permission === 'denied';
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
+      <h2 className="font-bold mb-1" style={{ color: '#1C1C1A' }}>🔔 Notifikasi Order</h2>
+      <p className="text-xs mb-4" style={{ color: '#9CA38F' }}>
+        Terima alert suara + popup saat order baru masuk, meski tab kasir sedang tidak aktif.
+      </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+            style={{ background: isGranted ? '#EDF1EA' : isDenied ? '#FEF2F2' : '#FFF8EC' }}>
+            {isGranted ? '🔔' : isDenied ? '🔕' : '🔕'}
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>
+              {isGranted ? 'Notifikasi Aktif' : isDenied ? 'Notifikasi Diblokir' : 'Notifikasi Belum Diaktifkan'}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: isDenied ? '#DC2626' : '#9CA38F' }}>
+              {isGranted
+                ? 'Suara + popup browser aktif saat order masuk'
+                : isDenied
+                ? 'Buka Site Settings di browser → izinkan notifikasi'
+                : 'Klik toggle untuk mengaktifkan'}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleToggle}
+          className="relative inline-flex h-7 w-14 items-center rounded-full transition flex-shrink-0"
+          style={{ backgroundColor: isGranted ? '#658051' : '#E8ECE4' }}
+        >
+          <span
+            className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform"
+            style={{ transform: isGranted ? 'translateX(32px)' : 'translateX(4px)' }}
+          />
+        </button>
+      </div>
+      {isDenied && (
+        <div className="mt-3 rounded-xl px-4 py-3 text-xs" style={{ background: '#FEF2F2', color: '#DC2626' }}>
+          Browser memblokir notifikasi untuk site ini. Klik ikon 🔒 di address bar → <strong>Notifications → Allow</strong>, lalu refresh halaman.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PengaturanPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ openTime: '08:00', closeTime: '22:00', isForceClose: false });
@@ -183,6 +253,9 @@ export default function PengaturanPage() {
           </div>
         )}
       </div>
+
+      {/* Notifikasi */}
+      <NotifToggle />
 
       {/* Form jam operasional */}
       <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
