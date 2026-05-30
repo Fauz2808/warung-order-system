@@ -10,6 +10,7 @@ import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu 
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
+import { isPrinterConnected, connectPrinter, disconnectPrinter, printReceipt } from '@/lib/thermalPrinter';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -86,7 +87,74 @@ export default function KasirPage() {
   const [dismissedLowStock, setDismissedLowStock] = useState(false);
   const [payModalOrder, setPayModalOrder] = useState(null);
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [printerName, setPrinterName] = useState(null);
+  const [printerConnecting, setPrinterConnecting] = useState(false);
   const queryClient = useQueryClient();
+
+  const handleConnectPrinter = async () => {
+    if (isPrinterConnected()) { disconnectPrinter(); setPrinterName(null); return; }
+    setPrinterConnecting(true);
+    try {
+      const name = await connectPrinter();
+      setPrinterName(name);
+      toast.success(`🖨️ Printer "${name}" terhubung!`);
+    } catch (err) {
+      toast.error(err.message || 'Gagal menghubungkan printer');
+    } finally {
+      setPrinterConnecting(false);
+    }
+  };
+
+  const handlePrintOrder = async (order) => {
+    if (isPrinterConnected()) {
+      try {
+        await printReceipt(order);
+        toast.success('🖨️ Struk dicetak!');
+      } catch (err) {
+        toast.error(err.message || 'Gagal cetak');
+      }
+    } else {
+      // Fallback ke iframe print
+      const fmt = (n) =>
+        new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+      const fmtDt = (s) => new Date(s).toLocaleString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const itemRows = (order.items || []).map((item) => `
+        <tr>
+          <td style="padding:3px 0">${item.quantity}x ${item.menuName || item.menu?.name || '-'}${item.notes ? `<br><small style="color:#888">↳ ${item.notes}</small>` : ''}</td>
+          <td style="text-align:right;padding:3px 0;white-space:nowrap">${fmt(item.price * item.quantity)}</td>
+        </tr>`).join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice #${order.id}</title>
+<style>@page{size:58mm auto;margin:2mm 0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;color:#000;width:54mm;padding:2mm}.center{text-align:center}.bold{font-weight:bold}.divider{border-top:1px dashed #999;margin:4px 0}table{width:100%;border-collapse:collapse}td{font-size:11px;vertical-align:top}.total-row td{font-weight:bold;font-size:13px;padding-top:4px}.footer{text-align:center;margin-top:6px;font-size:10px;color:#555}</style>
+</head><body>
+<div class="center" style="margin-bottom:10px"><div class="bold" style="font-size:16px">CARRA COFFEE</div></div>
+<div class="divider"></div>
+<table style="margin-bottom:8px">
+<tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.id}</td></tr>
+<tr><td style="color:#555">Tanggal</td><td style="text-align:right">${fmtDt(order.createdAt)}</td></tr>
+<tr><td style="color:#555">Meja</td><td style="text-align:right">Meja ${order.table?.number} · Lantai ${order.table?.floor}</td></tr>
+${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-align:right">${order.customerName}</td></tr>` : ''}
+<tr><td style="color:#555">Tipe</td><td style="text-align:right">${order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'}</td></tr>
+<tr><td style="color:#555">Pembayaran</td><td style="text-align:right;font-weight:bold">${order.isPaid ? 'LUNAS' : 'BELUM BAYAR'}</td></tr>
+</table><div class="divider"></div>
+<table style="margin-bottom:4px">${itemRows}</table>
+<div class="divider"></div>
+<table><tr class="total-row"><td>TOTAL</td><td style="text-align:right">${fmt(order.totalAmount)}</td></tr></table>
+<div class="divider"></div>
+<div class="footer"><div>Terima kasih telah berkunjung!</div><div>— Carra Coffee —</div></div>
+</body></html>`;
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+      document.body.appendChild(iframe);
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+      iframe.onload = () => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => document.body.removeChild(iframe), 2000);
+      };
+    }
+  };
 
   // Cek & minta permission notifikasi saat pertama kali load
   useEffect(() => {
@@ -259,11 +327,23 @@ export default function KasirPage() {
           <h1 className="text-xl font-bold" style={{ color: '#1C1C1A' }}>Dashboard Kasir</h1>
           <p className="text-sm" style={{ color: '#9CA38F' }}>Update status pesanan secara real-time</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-xs" style={{ color: '#9CA38F' }}>Pendapatan hari ini</p>
             <p className="text-lg font-bold" style={{ color: '#658051' }}>{formatRupiah(todayRevenue)}</p>
           </div>
+          {/* Printer connect toggle */}
+          <button
+            onClick={handleConnectPrinter}
+            disabled={printerConnecting}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm border transition"
+            style={printerName
+              ? { background: '#EDF1EA', borderColor: '#658051', color: '#658051' }
+              : { background: '#F7F7F5', borderColor: '#E8ECE4', color: '#6B7560' }}
+            title={printerName ? `Terhubung ke ${printerName} — klik untuk putus` : 'Hubungkan thermal printer'}
+          >
+            🖨️ {printerConnecting ? '...' : printerName ? printerName : 'Printer'}
+          </button>
           <button
             onClick={() => router.push('/kasir/order-baru')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition"
@@ -449,6 +529,7 @@ export default function KasirPage() {
               })}
               onOpenPayModal={(order) => setPayModalOrder(order)}
               onOpenInvoice={(order) => setInvoiceOrder(order)}
+              onDirectPrint={handlePrintOrder}
             />
           ))
         )}
@@ -502,7 +583,7 @@ export default function KasirPage() {
 const getWaitMinutes = (dateStr) => Math.floor((Date.now() - new Date(dateStr)) / 60000);
 
 // ─── Komponen OrderCard ───────────────────────────────
-function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect, onOpenPayModal, onOpenInvoice }) {
+function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect, onOpenPayModal, onOpenInvoice, onDirectPrint }) {
   const [expanded, setExpanded] = useState(true);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -540,62 +621,6 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const swipeThreshold = 60;
   const swipeTriggered = Math.abs(swipeX) >= swipeThreshold;
   const swipeLabel = nextStatus === 'preparing' ? '👨‍🍳 Proses' : nextStatus === 'done' ? '✓ Selesai' : null;
-
-  const handleDirectPrint = () => {
-    const fmt = (n) =>
-      new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
-    const formatDateTime = (dateStr) => {
-      const d = new Date(dateStr);
-      return d.toLocaleString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    };
-    const itemRows = (order.items || []).map((item) => `
-      <tr>
-        <td style="padding:3px 0">${item.quantity}x ${item.menuName || item.menu?.name || '-'}${item.notes ? `<br><small style="color:#888">↳ ${item.notes}</small>` : ''}</td>
-        <td style="text-align:right;padding:3px 0;white-space:nowrap">${fmt(item.price * item.quantity)}</td>
-      </tr>
-    `).join('');
-    const notesRow = order.notes
-      ? `<tr><td colspan="2" style="padding:6px 0 0;font-size:11px;color:#555">Catatan: ${order.notes}</td></tr>`
-      : '';
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice #${order.id}</title>
-<style>
-@page{size:58mm auto;margin:2mm 0}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Courier New',monospace;font-size:11px;color:#000;background:#fff;width:54mm;padding:2mm}
-.center{text-align:center}.bold{font-weight:bold}.divider{border-top:1px dashed #999;margin:4px 0}
-table{width:100%;border-collapse:collapse}td{font-size:11px;vertical-align:top}
-.total-row td{font-weight:bold;font-size:13px;padding-top:4px}
-.footer{text-align:center;margin-top:6px;font-size:10px;color:#555}
-</style></head><body>
-<div class="center" style="margin-bottom:10px"><div class="bold" style="font-size:16px">CARRA COFFEE</div></div>
-<div class="divider"></div>
-<table style="margin-bottom:8px">
-<tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.id}</td></tr>
-<tr><td style="color:#555">Tanggal</td><td style="text-align:right">${formatDateTime(order.createdAt)}</td></tr>
-<tr><td style="color:#555">Meja</td><td style="text-align:right">Meja ${order.table?.number} · Lantai ${order.table?.floor}</td></tr>
-${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-align:right">${order.customerName}</td></tr>` : ''}
-<tr><td style="color:#555">Tipe</td><td style="text-align:right">${order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'}</td></tr>
-<tr><td style="color:#555">Pembayaran</td><td style="text-align:right;font-weight:bold">${order.isPaid ? 'LUNAS' : 'BELUM BAYAR'}</td></tr>
-</table>
-<div class="divider"></div>
-<table style="margin-bottom:4px">${itemRows}${notesRow}</table>
-<div class="divider"></div>
-<table><tr class="total-row"><td>TOTAL</td><td style="text-align:right">${fmt(order.totalAmount)}</td></tr></table>
-<div class="divider"></div>
-<div class="footer"><div>Terima kasih telah berkunjung!</div><div>— Carra Coffee —</div></div>
-</body></html>`;
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    iframe.onload = () => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => document.body.removeChild(iframe), 2000);
-    };
-  };
 
   return (
     <div className="relative overflow-hidden rounded-2xl"
@@ -727,7 +752,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
           )}
           {/* Tombol print langsung ke thermal printer */}
           <button
-            onClick={(e) => { e.stopPropagation(); handleDirectPrint(order); }}
+            onClick={(e) => { e.stopPropagation(); onDirectPrint(order); }}
             className="w-8 h-8 flex items-center justify-center rounded-xl border text-base transition shrink-0"
             style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
             title="Print Invoice"
