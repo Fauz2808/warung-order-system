@@ -206,7 +206,7 @@ export default function PengaturanPage() {
       <div>
         <h1 className="text-2xl font-bold" style={{ color: '#1C1C1A' }}>⚙️ Pengaturan</h1>
         <p className="text-sm mt-1" style={{ color: '#6B7560' }}>
-          {isOwner ? 'Atur jam operasional dan status warung' : 'Pengaturan notifikasi'}
+          Atur status warung, jam operasional &amp; notifikasi
         </p>
       </div>
 
