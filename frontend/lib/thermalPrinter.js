@@ -179,7 +179,18 @@ export function disconnectPrinter() {
   _device = null;
 }
 
-// Auto-reconnect to previously paired printer — no picker dialog
+// Check apakah ada printer yang pernah dipair (tanpa connect)
+export async function hasRememberedPrinter() {
+  if (!isBTSupported()) return false;
+  try {
+    const devices = await navigator.bluetooth.getDevices();
+    return devices.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Auto-reconnect to previously paired printer — no picker dialog, with 8s timeout
 export async function tryAutoReconnect() {
   if (!isBTSupported()) return false;
   if (isPrinterConnected()) return true;
@@ -187,18 +198,42 @@ export async function tryAutoReconnect() {
     const remembered = await navigator.bluetooth.getDevices();
     if (!remembered.length) return false;
 
-    // Try all remembered devices, pick first that works
     for (const device of remembered) {
       try {
-        const server = await device.gatt.connect();
+        // Timeout 8 detik — jangan tunggu lama kalau printer mati
+        const server = await Promise.race([
+          device.gatt.connect(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+        ]);
         const name = await _bindDevice(device, server);
         if (name) return true;
-      } catch { /* try next */ }
+      } catch { /* printer mungkin mati, coba device berikutnya */ }
     }
     return false;
   } catch {
     return false;
   }
+}
+
+// Watch advertisements — auto-connect saat printer nyala tanpa perlu tap apapun
+export async function watchForPrinter(onConnected) {
+  if (!isBTSupported()) return;
+  try {
+    const remembered = await navigator.bluetooth.getDevices();
+    for (const device of remembered) {
+      try {
+        await device.watchAdvertisements();
+        device.addEventListener('advertisementreceived', async () => {
+          if (isPrinterConnected()) return;
+          try {
+            const server = await device.gatt.connect();
+            const name = await _bindDevice(device, server);
+            if (name) onConnected(name);
+          } catch { /* ignore */ }
+        });
+      } catch { /* watchAdvertisements not supported, skip */ }
+    }
+  } catch { /* ignore */ }
 }
 
 const fmt = (n) =>

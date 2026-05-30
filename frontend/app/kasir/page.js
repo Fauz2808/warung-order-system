@@ -10,7 +10,7 @@ import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu 
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
-import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, tryAutoReconnect } from '@/lib/thermalPrinter';
+import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, tryAutoReconnect, hasRememberedPrinter, watchForPrinter } from '@/lib/thermalPrinter';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -108,16 +108,25 @@ export default function KasirPage() {
   const handlePrintOrder = async (order) => {
     if (isPrintingNow()) { toast('Sedang mencetak...'); return; }
 
-    // Kalau belum connect — coba silent reconnect (remembered device), baru picker
+    // Kalau belum connect — coba reconnect tanpa buka picker
     if (!isPrinterConnected() && typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
       setPrinterConnecting(true);
-      // 1. Silent reconnect dulu (tidak buka dialog)
-      const reconnected = await tryAutoReconnect();
-      if (reconnected) {
-        setPrinterName(getConnectedName() || 'Printer');
-        setPrinterConnecting(false);
+      const remembered = await hasRememberedPrinter();
+
+      if (remembered) {
+        // Device sudah pernah dipair — reconnect silent, JANGAN buka picker
+        const tid = toast.loading('🖨️ Menghubungkan printer...');
+        const reconnected = await tryAutoReconnect();
+        if (reconnected) {
+          setPrinterName(getConnectedName() || 'Printer');
+          toast.success('🖨️ Printer terhubung!', { id: tid });
+        } else {
+          toast.error('Printer tidak terjangkau. Pastikan RPP02N menyala.', { id: tid });
+          setPrinterConnecting(false);
+          return; // jangan lanjut print, jangan buka picker
+        }
       } else {
-        // 2. Tidak ada remembered device — buka picker
+        // Pertama kali — buka picker sekali saja
         try {
           const name = await connectPrinter();
           setPrinterName(name);
@@ -127,8 +136,8 @@ export default function KasirPage() {
           toast.error(err.message || 'Gagal menghubungkan printer');
           return;
         }
-        setPrinterConnecting(false);
       }
+      setPrinterConnecting(false);
     }
 
     if (isPrinterConnected()) {
@@ -194,7 +203,12 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
   // Auto-reconnect ke printer yang pernah di-pair — silent, tanpa dialog
   useEffect(() => {
     tryAutoReconnect().then((connected) => {
-      if (connected) setPrinterName(getConnectedName() || 'Printer');
+      if (connected) {
+        setPrinterName(getConnectedName() || 'Printer');
+      } else {
+        // Kalau gagal connect (printer mati), watch advertisements supaya auto-connect saat printer nyala
+        watchForPrinter((name) => setPrinterName(name));
+      }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
