@@ -4,6 +4,7 @@
 const express = require('express');
 const { z } = require('zod');
 const prisma = require('../prisma');
+const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
