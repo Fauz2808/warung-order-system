@@ -451,8 +451,8 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       <div className="lg:hidden bg-white border-b px-4 py-2 flex items-center justify-between"
         style={{ borderColor: '#E8ECE4' }}>
         <div>
-          <p className="text-xs" style={{ color: '#9CA38F' }}>Pendapatan hari ini</p>
-          <p className="text-sm font-bold" style={{ color: '#658051' }}>{formatRupiah(todayRevenue)}</p>
+          <p className="text-xs" style={{ color: '#9CA38F' }}>Total order hari ini</p>
+          <p className="text-sm font-bold" style={{ color: '#658051' }}>{orders.length} order</p>
         </div>
         <button
           onClick={() => router.push('/kasir/order-baru')}
@@ -810,12 +810,12 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
           {order.status !== 'done' && order.status !== 'cancelled' && (
             <button
               onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
-              className="w-8 h-8 flex items-center justify-center rounded-xl border text-sm transition shrink-0"
-              style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
+              className="flex items-center gap-1 px-2.5 h-8 rounded-xl border text-xs font-semibold transition shrink-0"
+              style={{ borderColor: '#FCD34D', background: '#FEF3C7', color: '#92400E' }}
               title="Edit pesanan"
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF3C7'; e.currentTarget.style.borderColor = '#FCD34D'; e.currentTarget.style.color = '#92400E'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#F7F7F5'; e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.color = '#6B7560'; }}>
-              ✏️
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#FDE68A'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#FEF3C7'; }}>
+              ✏️ Edit
             </button>
           )}
           {/* Tombol print langsung ke thermal printer */}
