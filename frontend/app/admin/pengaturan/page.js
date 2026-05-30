@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getSettings, updateSettings, getUsers, createUser, updateUser, deleteUser, changePassword } from '@/lib/api';
+import { isBTSupported, isPrinterConnected, getConnectedName, connectPrinter, disconnectPrinter, tryAutoReconnect } from '@/lib/thermalPrinter';
 
 const EMPTY_USER_FORM  = { username: '', password: '', name: '' };
 const EMPTY_EDIT_FORM  = { name: '', password: '', isActive: true };
@@ -94,6 +95,28 @@ export default function PengaturanPage() {
   useEffect(() => { setIsOwner(getRoleFromToken() === 'owner'); }, []);
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ openTime: '08:00', closeTime: '22:00', isForceClose: false });
+
+  // Printer state
+  const [printerName, setPrinterName]       = useState(null);
+  const [printerConnecting, setPrinterConnecting] = useState(false);
+
+  useEffect(() => {
+    tryAutoReconnect().then((ok) => { if (ok) setPrinterName(getConnectedName() || 'Printer'); });
+  }, []);
+
+  const handleConnectPrinter = async () => {
+    if (isPrinterConnected()) { disconnectPrinter(); setPrinterName(null); return; }
+    setPrinterConnecting(true);
+    try {
+      const name = await connectPrinter();
+      setPrinterName(name);
+      toast.success(`🖨️ "${name}" terhubung!`);
+    } catch (err) {
+      toast.error(err.message || 'Gagal menghubungkan printer');
+    } finally {
+      setPrinterConnecting(false);
+    }
+  };
 
   // State kelola akun
   const [showAddUser, setShowAddUser]     = useState(false);
@@ -269,6 +292,39 @@ export default function PengaturanPage() {
 
       {/* Notifikasi */}
       <NotifToggle />
+
+      {/* Thermal Printer */}
+      {isBTSupported() && (
+        <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
+          <h2 className="font-bold mb-1" style={{ color: '#1C1C1A' }}>🖨️ Thermal Printer</h2>
+          <p className="text-xs mb-4" style={{ color: '#9CA38F' }}>
+            Hubungkan printer RPP02N via Bluetooth untuk cetak struk langsung.
+          </p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              {printerName ? (
+                <p className="text-sm font-semibold" style={{ color: '#658051' }}>
+                  ✅ Terhubung ke <strong>{printerName}</strong>
+                </p>
+              ) : (
+                <p className="text-sm" style={{ color: '#9CA38F' }}>Belum terhubung</p>
+              )}
+              <p className="text-xs mt-0.5" style={{ color: '#C8CCBE' }}>
+                Pastikan printer menyala dan Bluetooth aktif
+              </p>
+            </div>
+            <button
+              onClick={handleConnectPrinter}
+              disabled={printerConnecting}
+              className="px-4 py-2.5 rounded-xl font-semibold text-sm border transition shrink-0 disabled:opacity-50"
+              style={printerName
+                ? { background: '#FEE2E2', borderColor: '#FECACA', color: '#DC2626' }
+                : { background: '#EDF1EA', borderColor: '#658051', color: '#658051' }}>
+              {printerConnecting ? '⏳ Menghubungkan...' : printerName ? 'Putus Koneksi' : '🔗 Hubungkan Printer'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Form jam operasional */}
       <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
