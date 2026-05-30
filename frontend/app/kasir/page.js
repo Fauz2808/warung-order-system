@@ -106,6 +106,21 @@ export default function KasirPage() {
   };
 
   const handlePrintOrder = async (order) => {
+    // Kalau BT support tapi belum connect — auto-connect dulu, lalu print
+    if (!isPrinterConnected() && typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
+      setPrinterConnecting(true);
+      try {
+        const name = await connectPrinter();
+        setPrinterName(name);
+        toast.success(`🖨️ "${name}" terhubung — mencetak struk...`);
+      } catch (err) {
+        setPrinterConnecting(false);
+        toast.error(err.message || 'Gagal menghubungkan printer');
+        return;
+      }
+      setPrinterConnecting(false);
+    }
+
     if (isPrinterConnected()) {
       try {
         await printReceipt(order);
