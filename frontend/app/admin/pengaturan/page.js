@@ -314,7 +314,7 @@ export default function PengaturanPage() {
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Notifikasi */}
       <NotifToggle />
