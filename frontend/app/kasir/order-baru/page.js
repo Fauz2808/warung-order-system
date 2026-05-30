@@ -26,9 +26,11 @@ export default function OrderBaruPage() {
   const [orderNotes, setOrderNotes] = useState('');
   const [noteModal, setNoteModal] = useState(null);
   const [showCartDrawer, setShowCartDrawer] = useState(false);
-  const [showPayment, setShowPayment] = useState(false); // payment modal
+  const [showPayment, setShowPayment] = useState(false);
   const [customerName, setCustomerName] = useState('');
-  const [payNow, setPayNow] = useState(true); // true = bayar sekarang, false = bayar nanti
+  const [payNow, setPayNow] = useState(true);
+  // AddItemModal state
+  const [addItemModal, setAddItemModal] = useState(null); // { item } or null
 
   const { data: menu = [], isLoading: loadingMenu } = useQuery({
     queryKey: ['menu'],
@@ -48,13 +50,12 @@ export default function OrderBaruPage() {
     enabled: !loading,
   });
 
-  // Helper: emoji untuk menu card
+  // Helper: emoji untuk menu list
   const getCatEmoji = (slug) => categories.find((c) => c.slug === slug)?.emoji ?? '☕';
 
   const orderMutation = useMutation({
     mutationFn: createOrder,
     onSuccess: (res) => {
-      // Invalidate cache orders di kasir page supaya langsung muncul
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       toast.success(`Order #${res.data.id} berhasil dibuat! 🎉`);
       router.push('/kasir');
@@ -67,49 +68,77 @@ export default function OrderBaruPage() {
   if (loading) return null;
 
   // ── Cart helpers ──────────────────────────────────
-  const addToCart = (item) => {
+  const addToCart = (item, opts = {}) => {
+    const { temperature, additionalEspressoShots = 0, additionalEspressoPrice, notes = '' } = opts;
     setCart((prev) => {
-      const existing = prev.find((i) => i.menuId === item.id);
-      if (existing) return prev.map((i) => i.menuId === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+      // If item has options, always add as new entry (different shots/temp may differ)
+      // For simple items, increment existing
+      const needsOptions = item.hasTemperatureOption || item.hasAdditionalEspresso;
+      if (!needsOptions) {
+        const existing = prev.find((i) => i.menuId === item.id);
+        if (existing) return prev.map((i) => i.menuId === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
       return [...prev, {
         menuId: item.id,
         name: item.name,
         price: item.price,
         quantity: 1,
-        notes: '',
+        notes,
         hasTemperatureOption: item.hasTemperatureOption || false,
-        temperature: item.hasTemperatureOption ? 'ice' : undefined,
+        temperature: temperature ?? (item.hasTemperatureOption ? 'Ice' : undefined),
         hasAdditionalEspresso: item.hasAdditionalEspresso || false,
-        additionalEspressoShots: 0,
-        additionalEspressoPrice: item.additionalEspressoPrice || 3000,
+        additionalEspressoShots,
+        additionalEspressoPrice: additionalEspressoPrice ?? (item.additionalEspressoPrice || 3000),
       }];
     });
   };
 
-  const updateTemperature = (menuId, temperature) => {
-    setCart((prev) => prev.map((item) => item.menuId === menuId ? { ...item, temperature } : item));
+  // handleAddItem — open modal if item needs options, else add directly
+  const handleAddItem = (item) => {
+    if (item.hasTemperatureOption || item.hasAdditionalEspresso) {
+      setAddItemModal({ item });
+    } else {
+      addToCart(item);
+    }
   };
 
-  const updateEspresso = (menuId, shots) => {
-    setCart((prev) => prev.map((item) => item.menuId === menuId
-      ? { ...item, additionalEspressoShots: Math.max(0, Math.min(10, shots)) }
-      : item));
+  // handleIncrementItem — same: open modal for options items, increment for simple
+  const handleIncrementItem = (item) => {
+    if (item.hasTemperatureOption || item.hasAdditionalEspresso) {
+      setAddItemModal({ item });
+    } else {
+      addToCart(item);
+    }
   };
 
-  const removeFromCart = (menuId) => {
+  const removeFromCart = (cartIdx) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.menuId === menuId);
-      if (!existing) return prev;
-      if (existing.quantity === 1) return prev.filter((i) => i.menuId !== menuId);
-      return prev.map((i) => i.menuId === menuId ? { ...i, quantity: i.quantity - 1 } : i);
+      const item = prev[cartIdx];
+      if (!item) return prev;
+      if (item.quantity === 1) return prev.filter((_, i) => i !== cartIdx);
+      return prev.map((i, idx) => idx === cartIdx ? { ...i, quantity: i.quantity - 1 } : i);
     });
   };
 
-  const updateItemNotes = (menuId, notes) =>
-    setCart((prev) => prev.map((i) => i.menuId === menuId ? { ...i, notes } : i));
+  const removeFromCartByMenuId = (menuId) => {
+    setCart((prev) => {
+      // Find last occurrence and decrement / remove
+      const lastIdx = [...prev].map((i, idx) => i.menuId === menuId ? idx : -1).filter((i) => i !== -1).pop();
+      if (lastIdx === undefined) return prev;
+      const item = prev[lastIdx];
+      if (item.quantity === 1) return prev.filter((_, i) => i !== lastIdx);
+      return prev.map((i, idx) => idx === lastIdx ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  const updateItemNotes = (cartIdx, notes) =>
+    setCart((prev) => prev.map((i, idx) => idx === cartIdx ? { ...i, notes } : i));
 
   const clearCart = () => setCart([]);
-  const getQty = (menuId) => cart.find((i) => i.menuId === menuId)?.quantity || 0;
+
+  // Total qty per menuId (for list display)
+  const getQty = (menuId) => cart.filter((i) => i.menuId === menuId).reduce((s, i) => s + i.quantity, 0);
+
   const totalAmount = cart.reduce((sum, i) => {
     const espressoExtra = (i.additionalEspressoShots || 0) * (i.additionalEspressoPrice || 0);
     return sum + (i.price + espressoExtra) * i.quantity;
@@ -117,27 +146,25 @@ export default function OrderBaruPage() {
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   // ── Filter menu ───────────────────────────────────
-  // Hanya tampilkan kategori yang ada menu-nya (urutan dari DB)
   const activeSlugs = new Set(menu.map((m) => m.category));
   const filteredCategories = categories.filter((c) => activeSlugs.has(c.slug));
 
   const filtered = menu.filter((m) => {
     const catMatch = activeCategory === 'semua' || m.category === activeCategory;
     const searchMatch = !search || m.name.toLowerCase().includes(search.toLowerCase());
-    return catMatch && searchMatch; // tampilkan semua, termasuk yg tidak tersedia
+    return catMatch && searchMatch;
   });
 
   // Stok helpers
   const isOutOfStock  = (item) => item.stock !== null && item.stock <= 0;
   const isLowStock    = (item) => item.stock !== null && item.stock > 0 && item.stock <= 5;
-  const hasStockLimit = (item) => item.stock !== null; // punya batas stok (bukan unlimited)
+  const hasStockLimit = (item) => item.stock !== null;
 
   // ── Validasi sebelum ke payment ───────────────────
   const handleSubmit = () => {
     if (cart.length === 0) { toast.error('Keranjang kosong!'); return; }
     if (!selectedTable && orderType === 'dine-in') { toast.error('Pilih meja dulu!'); return; }
 
-    // Validasi cart — hapus item yg sudah tidak tersedia / stok habis
     const invalidItems = cart.filter((cartItem) => {
       const menuItem = menu.find((m) => m.id === cartItem.menuId);
       return !menuItem || !menuItem.isAvailable || isOutOfStock(menuItem);
@@ -151,7 +178,6 @@ export default function OrderBaruPage() {
       return;
     }
 
-    // Bayar nanti → langsung submit tanpa payment modal
     if (!payNow) {
       const tableId = orderType === 'take-away' ? (tables[0]?.id || 1) : parseInt(selectedTable);
       orderMutation.mutate({
@@ -164,7 +190,7 @@ export default function OrderBaruPage() {
           menuId: i.menuId,
           quantity: i.quantity,
           notes: [
-            i.temperature ? (i.temperature === 'hot' ? '🔥 Hot' : '🧊 Ice') : null,
+            i.temperature ? (i.temperature === 'Hot' ? '🔥 Hot' : '🧊 Ice') : null,
             i.additionalEspressoShots > 0 ? `+${i.additionalEspressoShots} Espresso Shot` : null,
             i.notes || null,
           ].filter(Boolean).join(' · ') || undefined,
@@ -176,7 +202,6 @@ export default function OrderBaruPage() {
       return;
     }
 
-    // Bayar sekarang → buka payment modal
     setShowCartDrawer(false);
     setShowPayment(true);
   };
@@ -199,7 +224,7 @@ export default function OrderBaruPage() {
         menuId: i.menuId,
         quantity: i.quantity,
         notes: [
-          i.temperature ? (i.temperature === 'hot' ? '🔥 Hot' : '🧊 Ice') : null,
+          i.temperature ? (i.temperature === 'Hot' ? '🔥 Hot' : '🧊 Ice') : null,
           i.additionalEspressoShots > 0 ? `+${i.additionalEspressoShots} Espresso Shot` : null,
           i.notes || null,
         ].filter(Boolean).join(' · ') || undefined,
@@ -210,7 +235,18 @@ export default function OrderBaruPage() {
     setShowPayment(false);
   };
 
-  // ── Order panel JSX (dipakai di desktop sidebar & mobile drawer) ─
+  // ── Cart item summary badge ───────────────────────
+  const getItemSummaryBadge = (item) => {
+    const parts = [];
+    if (item.temperature) parts.push(item.temperature === 'Hot' ? '🔥 Hot' : '🧊 Ice');
+    if ((item.additionalEspressoShots || 0) > 0) parts.push(`+${item.additionalEspressoShots} Shot`);
+    // Quick-note chips from notes field (chips joined by comma, before any '·')
+    const notesBefore = item.notes?.split(' · ')[0];
+    if (notesBefore) parts.push(notesBefore);
+    return parts.join(' · ');
+  };
+
+  // ── Order panel JSX ──────────────────────────────
   const orderPanelJSX = (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b shrink-0 flex items-center justify-between" style={{ borderColor: '#E8ECE4' }}>
@@ -231,85 +267,57 @@ export default function OrderBaruPage() {
             <p className="text-xs mt-1">Pilih menu di sebelah kiri</p>
           </div>
         ) : (
-          cart.map((item) => (
-            <div key={item.menuId} className="rounded-xl p-3 border" style={{ background: '#FAFAF8', borderColor: '#E8ECE4' }}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.name}</p>
-                  <p className="text-xs" style={{ color: '#658051' }}>{formatRupiah((item.price + (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0)) * item.quantity)}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => removeFromCart(item.menuId)}
-                    className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center"
-                    style={{ background: '#FEE2E2', color: '#DC2626' }}>−</button>
-                  <span className="text-sm font-bold w-5 text-center" style={{ color: '#1C1C1A' }}>{item.quantity}</span>
-                  <button onClick={() => { const m = menu.find((x) => x.id === item.menuId); if (m) addToCart(m); }}
-                    className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white"
-                    style={{ background: '#658051' }}>+</button>
-                </div>
-              </div>
-              {/* Temperature selector — only for drinks with hasTemperatureOption */}
-              {item.hasTemperatureOption && (
-                <div className="flex gap-1 mt-1">
-                  {[{ v: 'hot', l: '🔥 Hot' }, { v: 'ice', l: '🧊 Ice' }].map((opt) => (
-                    <button
-                      key={opt.v}
-                      type="button"
-                      onClick={() => updateTemperature(item.menuId, opt.v)}
-                      className="px-2 py-0.5 rounded-lg text-xs font-semibold border transition"
-                      style={item.temperature === opt.v
-                        ? { background: opt.v === 'hot' ? '#FEF3C7' : '#DBEAFE', color: opt.v === 'hot' ? '#92400E' : '#1E40AF', borderColor: opt.v === 'hot' ? '#FCD34D' : '#93C5FD' }
-                        : { background: '#F7F7F5', color: '#9CA38F', borderColor: '#E8ECE4' }}>
-                      {opt.l}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* Espresso shot stepper */}
-              {item.hasAdditionalEspresso && (
-                <div className="mt-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs" style={{ color: '#9CA38F' }}>☕ Espresso Shot</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => updateEspresso(item.menuId, (item.additionalEspressoShots || 0) - 1)}
-                        disabled={(item.additionalEspressoShots || 0) === 0}
-                        className="w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center border transition disabled:opacity-30"
-                        style={{ borderColor: '#E8ECE4', color: '#658051' }}>−</button>
-                      <span className="text-xs font-bold w-4 text-center" style={{ color: '#1C1C1A' }}>{item.additionalEspressoShots || 0}</span>
-                      <button
-                        onClick={() => updateEspresso(item.menuId, (item.additionalEspressoShots || 0) + 1)}
-                        className="w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center text-white transition"
-                        style={{ background: '#658051' }}>+</button>
-                    </div>
-                  </div>
-                  {(item.additionalEspressoShots || 0) > 0 && (
-                    <p className="text-xs mt-0.5" style={{ color: '#658051' }}>
-                      +{formatRupiah((item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 3000))}
+          cart.map((item, cartIdx) => {
+            const summaryBadge = getItemSummaryBadge(item);
+            return (
+              <div key={cartIdx} className="rounded-xl p-3 border" style={{ background: '#FAFAF8', borderColor: '#E8ECE4' }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.name}</p>
+                    <p className="text-xs" style={{ color: '#658051' }}>
+                      {formatRupiah((item.price + (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0)) * item.quantity)}
                     </p>
-                  )}
+                    {/* Summary badge: temp + espresso + chips */}
+                    {summaryBadge ? (
+                      <p className="text-xs mt-0.5 truncate" style={{ color: '#9CA38F' }}>{summaryBadge}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => removeFromCart(cartIdx)}
+                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center"
+                      style={{ background: '#FEE2E2', color: '#DC2626' }}>−</button>
+                    <span className="text-sm font-bold w-5 text-center" style={{ color: '#1C1C1A' }}>{item.quantity}</span>
+                    <button
+                      onClick={() => {
+                        const m = menu.find((x) => x.id === item.menuId);
+                        if (m) handleIncrementItem(m);
+                      }}
+                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white"
+                      style={{ background: '#658051' }}>+</button>
+                  </div>
                 </div>
-              )}
-              {item.notes ? (
-                <div className="flex items-center justify-between mt-1.5">
-                  <p className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#FEF3C7', color: '#92400E' }}>
-                    ⚠️ {item.notes}
-                  </p>
-                  <button onClick={() => setNoteModal({ menuId: item.menuId, name: item.name, currentNote: item.notes })}
-                    className="text-xs underline ml-2 shrink-0" style={{ color: '#9CA38F' }}>edit</button>
-                </div>
-              ) : (
-                <button onClick={() => setNoteModal({ menuId: item.menuId, name: item.name, currentNote: '' })}
-                  className="text-xs mt-1.5" style={{ color: '#9CA38F' }}>
-                  + tambah catatan
-                </button>
-              )}
-            </div>
-          ))
+                {/* Notes row */}
+                {item.notes ? (
+                  <div className="flex items-center justify-between mt-1.5">
+                    <p className="text-xs px-2 py-0.5 rounded-full truncate max-w-[160px]" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                      ⚠️ {item.notes}
+                    </p>
+                    <button onClick={() => setNoteModal({ cartIdx, menuId: item.menuId, name: item.name, currentNote: item.notes })}
+                      className="text-xs underline ml-2 shrink-0" style={{ color: '#9CA38F' }}>edit</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setNoteModal({ cartIdx, menuId: item.menuId, name: item.name, currentNote: '' })}
+                    className="text-xs mt-1.5" style={{ color: '#9CA38F' }}>
+                    + tambah catatan
+                  </button>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* Settings — scrollable form fields */}
+      {/* Settings */}
       <div className="overflow-y-auto px-4 pt-3 pb-2 space-y-3 shrink-0 border-t" style={{ borderColor: '#E8ECE4', maxHeight: '55%' }}>
         {/* Order type */}
         <div>
@@ -400,7 +408,7 @@ export default function OrderBaruPage() {
         </div>
       </div>
 
-      {/* Footer — total + buttons, selalu terlihat di bawah */}
+      {/* Footer */}
       <div className="px-4 pb-4 pt-3 space-y-2 shrink-0 border-t" style={{ borderColor: '#E8ECE4' }}>
         {cart.length > 0 && (
           <div className="flex items-center justify-between mb-1">
@@ -463,10 +471,10 @@ export default function OrderBaruPage() {
         {/* ── Main content ─────────────────────────── */}
         <div className="flex-1 flex overflow-hidden">
 
-          {/* ── LEFT: Menu panel (full width mobile, partial desktop) */}
+          {/* ── LEFT: Menu panel */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-            {/* Search + category */}
+            {/* Search + category tabs */}
             <div className="bg-white border-b px-3 sm:px-4 py-3 space-y-2 shrink-0" style={{ borderColor: '#E8ECE4' }}>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">🔍</span>
@@ -478,7 +486,6 @@ export default function OrderBaruPage() {
                   onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
               </div>
               <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                {/* Tab "Semua" */}
                 <button onClick={() => setActiveCategory('semua')}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
                   style={activeCategory === 'semua'
@@ -486,7 +493,6 @@ export default function OrderBaruPage() {
                     : { background: '#F7F7F5', color: '#6B7560' }}>
                   Semua
                 </button>
-                {/* Tab per kategori (dari DB, hanya yg ada menu-nya) */}
                 {filteredCategories.map((cat) => (
                   <button key={cat.slug} onClick={() => setActiveCategory(cat.slug)}
                     className="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
@@ -499,8 +505,8 @@ export default function OrderBaruPage() {
               </div>
             </div>
 
-            {/* Menu grid — 2 col mobile, 3 col sm, 4 col xl */}
-            <div className="flex-1 overflow-y-auto p-3 pb-32 lg:pb-4">
+            {/* ── Menu list (compact vertical) */}
+            <div className="flex-1 overflow-y-auto pb-32 lg:pb-4">
               {loadingMenu ? (
                 <div className="text-center py-12" style={{ color: '#9CA38F' }}><p>Memuat menu...</p></div>
               ) : filtered.length === 0 ? (
@@ -508,8 +514,8 @@ export default function OrderBaruPage() {
                   <p className="text-3xl mb-2">🔍</p><p>Menu tidak ditemukan</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
-                  {filtered.map((item) => {
+                <div>
+                  {filtered.map((item, idx) => {
                     const qty         = getQty(item.id);
                     const unavailable = !item.isAvailable;
                     const outStock    = isOutOfStock(item);
@@ -518,93 +524,87 @@ export default function OrderBaruPage() {
                     const remaining   = hasLimit ? item.stock - qty : null;
                     const atMax       = hasLimit && qty >= item.stock;
                     const disabled    = unavailable || outStock;
+                    const isLast      = idx === filtered.length - 1;
 
                     return (
-                      <div key={item.id} className="bg-white rounded-2xl border overflow-hidden"
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-3 px-4 py-3"
                         style={{
-                          borderColor: unavailable ? '#E5E7EB' : outStock ? '#FECACA' : atMax ? '#FCD34D' : qty > 0 ? '#658051' : '#E8ECE4',
-                          boxShadow:   qty > 0 && !disabled ? `0 0 0 2px ${atMax ? '#FCD34D44' : '#65805133'}` : 'none',
-                          opacity:     disabled ? 0.6 : 1,
-                        }}>
-                        {/* Foto */}
-                        <div className="relative h-20 sm:h-24 flex items-center justify-center" style={{ background: '#F7F7F5' }}>
-                          {item.imageUrl
-                            // eslint-disable-next-line @next/next/no-img-element
-                            ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" style={{ filter: disabled ? 'grayscale(70%)' : 'none' }} />
-                            : <span className="text-3xl" style={{ filter: disabled ? 'grayscale(1)' : 'none' }}>{getCatEmoji(item.category)}</span>}
-
-                          {/* Badge qty di cart */}
-                          {qty > 0 && !disabled && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                              style={{ background: atMax ? '#D97706' : '#658051' }}>{qty}</div>
-                          )}
-                          {/* Badge TIDAK TERSEDIA */}
-                          {unavailable && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-xs font-bold px-2.5 py-1 rounded-full text-white text-center leading-tight"
-                                style={{ background: 'rgba(107,114,128,0.88)' }}>Tidak<br/>Tersedia</span>
-                            </div>
-                          )}
-                          {/* Badge HABIS */}
-                          {!unavailable && outStock && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-xs font-bold px-2.5 py-1 rounded-full text-white"
-                                style={{ background: 'rgba(220,38,38,0.85)' }}>Habis</span>
-                            </div>
-                          )}
+                          borderBottom: isLast ? 'none' : '1px solid #E8ECE4',
+                          background: '#fff',
+                          opacity: disabled ? 0.55 : 1,
+                        }}
+                      >
+                        {/* Left: emoji + name + price */}
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-2xl shrink-0" style={{ filter: disabled ? 'grayscale(1)' : 'none' }}>
+                            {getCatEmoji(item.category)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm leading-tight truncate" style={{ color: disabled ? '#9CA38F' : '#1C1C1A' }}>
+                              {item.name}
+                            </p>
+                            <p className="text-xs font-semibold mt-0.5" style={{ color: disabled ? '#9CA38F' : '#658051' }}>
+                              {formatRupiah(item.price)}
+                            </p>
+                          </div>
                         </div>
 
-                        {/* Info */}
-                        <div className="p-2 sm:p-2.5">
-                          <p className="font-semibold text-xs leading-tight mb-0.5 line-clamp-1"
-                            style={{ color: disabled ? '#9CA38F' : '#1C1C1A' }}>{item.name}</p>
+                        {/* Right: stock badge + quantity controls */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Stock badge */}
+                          {!disabled && hasLimit && (
+                            <span
+                              className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
+                              style={
+                                atMax    ? { background: '#FEF3C7', color: '#92400E' } :
+                                lowStock ? { background: '#FEE2E2', color: '#DC2626' } :
+                                           { background: '#EDF1EA', color: '#658051' }
+                              }
+                            >
+                              {atMax ? 'Maks!' : `Sisa ${remaining}`}
+                            </span>
+                          )}
 
-                          {/* Harga + indikator stok */}
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs font-bold"
-                              style={{ color: disabled ? '#9CA38F' : '#658051' }}>{formatRupiah(item.price)}</p>
-                            {!disabled && hasLimit && (
-                              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
-                                style={
-                                  atMax    ? { background: '#FEF3C7', color: '#92400E' } :
-                                  lowStock ? { background: '#FEE2E2', color: '#DC2626' } :
-                                             { background: '#EDF1EA', color: '#658051' }
-                                }>
-                                {atMax ? 'Maks!' : `Sisa ${remaining}`}
-                              </span>
-                            )}
-                          </div>
-
+                          {/* Controls */}
                           {unavailable ? (
-                            /* Item dinonaktifkan admin — perlu restock/aktifkan */
-                            <div className="w-full py-1.5 rounded-lg text-xs font-semibold text-center"
-                              style={{ background: '#F3F4F6', color: '#9CA38F' }}>
-                              🔴 Perlu Restock
-                            </div>
+                            <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: '#F3F4F6', color: '#9CA38F' }}>
+                              Tidak Tersedia
+                            </span>
                           ) : outStock ? (
-                            <div className="w-full py-1.5 rounded-lg text-xs font-semibold text-center"
-                              style={{ background: '#FEF2F2', color: '#DC2626' }}>
+                            <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ background: '#FEF2F2', color: '#DC2626' }}>
                               Stok Habis
-                            </div>
+                            </span>
                           ) : qty === 0 ? (
-                            <button onClick={() => addToCart(item)}
-                              className="w-full py-1.5 rounded-lg text-xs font-semibold text-white transition"
+                            <button
+                              onClick={() => handleAddItem(item)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition"
                               style={{ background: '#658051' }}
                               onMouseEnter={(e) => e.currentTarget.style.background = '#4d6340'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}>
+                              onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}
+                            >
                               + Tambah
                             </button>
                           ) : (
-                            <div className="flex items-center justify-between gap-1">
-                              <button onClick={() => removeFromCart(item.id)}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => removeFromCartByMenuId(item.id)}
                                 className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center"
-                                style={{ background: '#FEE2E2', color: '#DC2626' }}>−</button>
-                              <span className="text-sm font-bold" style={{ color: atMax ? '#D97706' : '#1C1C1A' }}>
-                                {qty}{hasLimit ? `/${item.stock}` : ''}
+                                style={{ background: '#FEE2E2', color: '#DC2626' }}
+                              >−</button>
+                              <span
+                                className="text-sm font-bold w-5 text-center"
+                                style={{ color: atMax ? '#D97706' : '#1C1C1A' }}
+                              >
+                                {qty}
                               </span>
-                              <button onClick={() => addToCart(item)} disabled={atMax}
+                              <button
+                                onClick={() => handleIncrementItem(item)}
+                                disabled={atMax}
                                 className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white disabled:opacity-30"
-                                style={{ background: atMax ? '#D97706' : '#658051' }}>+</button>
+                                style={{ background: atMax ? '#D97706' : '#658051' }}
+                              >+</button>
                             </div>
                           )}
                         </div>
@@ -616,7 +616,7 @@ export default function OrderBaruPage() {
             </div>
           </div>
 
-          {/* ── RIGHT: Order panel — desktop only (hidden on mobile) */}
+          {/* ── RIGHT: Order panel — desktop only */}
           <div className="hidden lg:flex w-80 xl:w-96 shrink-0 flex-col bg-white border-l"
             style={{ borderColor: '#E8ECE4' }}>
             {orderPanelJSX}
@@ -644,7 +644,6 @@ export default function OrderBaruPage() {
             <div className="absolute inset-0 bg-black/40" onClick={() => setShowCartDrawer(false)} />
             <div className="relative bg-white rounded-t-3xl flex flex-col"
               style={{ maxHeight: '90vh' }}>
-              {/* Handle */}
               <div className="flex justify-center pt-3 pb-1 shrink-0">
                 <div className="w-10 h-1 rounded-full bg-gray-200" />
               </div>
@@ -660,8 +659,29 @@ export default function OrderBaruPage() {
       {noteModal && (
         <NoteModal
           item={noteModal}
-          onSave={(notes) => { updateItemNotes(noteModal.menuId, notes); setNoteModal(null); }}
+          onSave={(notes) => {
+            updateItemNotes(noteModal.cartIdx, notes);
+            setNoteModal(null);
+          }}
           onClose={() => setNoteModal(null)}
+        />
+      )}
+
+      {/* ── AddItemModal ───────────────────────────── */}
+      {addItemModal && (
+        <AddItemModal
+          item={addItemModal.item}
+          needsTemp={!!addItemModal.item.hasTemperatureOption}
+          onConfirm={(opts) => {
+            addToCart(addItemModal.item, {
+              temperature: opts.temp || undefined,
+              additionalEspressoShots: opts.additionalEspressoShots,
+              additionalEspressoPrice: opts.additionalEspressoPrice,
+              notes: opts.notes,
+            });
+            setAddItemModal(null);
+          }}
+          onClose={() => setAddItemModal(null)}
         />
       )}
 
@@ -678,39 +698,228 @@ export default function OrderBaruPage() {
   );
 }
 
-// ─── Modal Pembayaran ────────────────────────────────
-function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
-  const [method, setMethod]         = useState('cash');
-  const [receivedRaw, setReceivedRaw] = useState(''); // digits only, no separator
+// ─── AddItemModal (bottom sheet) ─────────────────────
+function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
+  const [selectedTemp, setSelectedTemp] = useState(needsTemp ? null : 'none');
+  const [selectedChips, setSelectedChips] = useState([]);
+  const [customNote, setCustomNote] = useState('');
+  const [espressoShots, setEspressoShots] = useState(0);
+
+  const espressoNote = espressoShots > 0 ? `+${espressoShots} Espresso Shot` : null;
+  const combinedNotes = [espressoNote, selectedChips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
+
+  const ICE_CHIPS = ['Less ice', 'No ice'];
+  const isHot = selectedTemp === 'Hot';
+
+  const toggleChip = (chip) => {
+    if (isHot && ICE_CHIPS.includes(chip)) return;
+    setSelectedChips((prev) =>
+      prev.includes(chip) ? prev.filter((c) => c !== chip) : [...prev, chip]
+    );
+  };
+
+  const handleTempSelect = (temp) => {
+    setSelectedTemp(temp);
+    if (temp === 'Hot') {
+      setSelectedChips((prev) => prev.filter((c) => !ICE_CHIPS.includes(c)));
+    }
+  };
+
+  const canConfirm = !needsTemp || selectedTemp !== null;
+  const quickNotes = ['Less sugar', 'Less ice', 'No ice', 'Extra sweet', 'No sugar'];
 
   const fmt = (n) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
-  const received = parseInt(receivedRaw, 10) || 0;
-  const change   = received - totalAmount;
+  return (
+    <div className="fixed inset-0 z-40 flex items-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full bg-white rounded-t-3xl shadow-2xl max-h-[90vh] flex flex-col">
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+
+        <div className="overflow-y-auto px-5 pb-5 pt-2 flex-1">
+          {/* Item info */}
+          <div className="flex items-center gap-3 mb-5">
+            <div
+              className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center text-2xl"
+              style={{ background: '#F7F7F5' }}
+            >
+              {item.imageUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                : '☕'}
+            </div>
+            <div>
+              <h3 className="font-bold text-lg leading-tight" style={{ color: '#1C1C1A' }}>{item.name}</h3>
+              <p className="font-semibold mt-0.5" style={{ color: '#658051' }}>{fmt(item.price)}</p>
+            </div>
+          </div>
+
+          {/* Hot / Ice selector */}
+          {needsTemp && (
+            <div className="mb-5">
+              <p className="text-sm font-semibold mb-3" style={{ color: '#1C1C1A' }}>
+                Pilih Suhu <span style={{ color: '#E84040' }}>*</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'Ice', label: 'Ice', emoji: '🧊', activeColor: '#2563EB', activeBg: '#EFF6FF', activeBorder: '#93C5FD' },
+                  { value: 'Hot', label: 'Hot', emoji: '♨️', activeColor: '#DC2626', activeBg: '#FEF2F2', activeBorder: '#FCA5A5' },
+                ].map((opt) => {
+                  const isActive = selectedTemp === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleTempSelect(opt.value)}
+                      className="flex flex-col items-center gap-1.5 py-4 rounded-2xl border-2 transition active:scale-95"
+                      style={{
+                        borderColor: isActive ? opt.activeBorder : '#E8ECE4',
+                        background:  isActive ? opt.activeBg : '#FAFAF8',
+                        color:       isActive ? opt.activeColor : '#6B7560',
+                      }}
+                    >
+                      <span className="text-3xl">{opt.emoji}</span>
+                      <span className="font-bold">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Additional Espresso Shot */}
+          {item.hasAdditionalEspresso && (
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>Additional Espresso Shot</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>
+                    +{fmt(item.additionalEspressoPrice || 3000)} per shot
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setEspressoShots((s) => Math.max(0, s - 1))}
+                    disabled={espressoShots === 0}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition disabled:opacity-30"
+                    style={{ borderColor: '#E8ECE4', color: '#658051' }}>
+                    −
+                  </button>
+                  <span className="w-8 text-center font-bold text-lg" style={{ color: '#1C1C1A' }}>{espressoShots}</span>
+                  <button
+                    onClick={() => setEspressoShots((s) => Math.min(10, s + 1))}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition"
+                    style={{ borderColor: '#658051', background: '#EDF1EA', color: '#658051' }}>
+                    +
+                  </button>
+                </div>
+              </div>
+              {espressoShots > 0 && (
+                <div className="rounded-xl px-3 py-2 flex items-center justify-between" style={{ background: '#EDF1EA' }}>
+                  <span className="text-xs font-semibold" style={{ color: '#658051' }}>☕ {espressoShots} shot extra</span>
+                  <span className="text-xs font-bold" style={{ color: '#658051' }}>
+                    +{fmt(espressoShots * (item.additionalEspressoPrice || 3000))}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Catatan / quick chips */}
+          <div className="mb-2">
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1C1C1A' }}>
+              Catatan <span className="font-normal text-xs" style={{ color: '#9CA38F' }}>(opsional)</span>
+            </p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {quickNotes.map((chip) => {
+                const active   = selectedChips.includes(chip);
+                const disabled = isHot && ICE_CHIPS.includes(chip);
+                return (
+                  <button
+                    key={chip}
+                    onClick={() => toggleChip(chip)}
+                    disabled={disabled}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition active:scale-95"
+                    style={disabled
+                      ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', cursor: 'not-allowed', textDecoration: 'line-through' }
+                      : active
+                      ? { background: '#EDF1EA', color: '#658051', borderColor: '#658051' }
+                      : { background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}
+                  >
+                    {disabled ? chip : active ? `✓ ${chip}` : `+ ${chip}`}
+                  </button>
+                );
+              })}
+            </div>
+            <textarea
+              value={customNote}
+              onChange={(e) => setCustomNote(e.target.value)}
+              placeholder="Catatan lain... (opsional)"
+              rows={2}
+              className="w-full rounded-xl px-4 py-3 text-sm resize-none outline-none border"
+              style={{ border: '1.5px solid #E8ECE4', color: '#1C1C1A' }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-8 pt-3 border-t shrink-0" style={{ borderColor: '#F0F0EC' }}>
+          <button
+            onClick={() => onConfirm({
+              temp: selectedTemp === 'none' ? '' : selectedTemp,
+              notes: combinedNotes,
+              additionalEspressoShots: espressoShots,
+              additionalEspressoPrice: item.additionalEspressoPrice || 3000,
+            })}
+            disabled={!canConfirm}
+            className="w-full py-4 rounded-2xl font-bold text-base text-white transition disabled:opacity-40"
+            style={{ background: '#658051' }}
+          >
+            {needsTemp && !selectedTemp ? 'Pilih suhu dulu' : 'Tambah ke Keranjang'}
+          </button>
+          <button onClick={onClose} className="w-full py-2 mt-1 text-sm" style={{ color: '#9CA38F' }}>
+            Batal
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal Pembayaran ────────────────────────────────
+function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
+  const [method, setMethod]           = useState('cash');
+  const [receivedRaw, setReceivedRaw] = useState('');
+
+  const fmt = (n) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+  const received   = parseInt(receivedRaw, 10) || 0;
+  const change     = received - totalAmount;
   const canConfirm = method === 'qris' || (method === 'cash' && received >= totalAmount);
 
-  // ── Numpad handlers ───────────────────────────────
   const padPress = (key) => {
     if (key === '⌫') {
       setReceivedRaw((p) => p.slice(0, -1));
     } else if (key === 'C') {
       setReceivedRaw('');
     } else {
-      // key bisa '0', '00', '000', atau '1'-'9'
       setReceivedRaw((p) => {
         const next = p + key;
-        // Batasi max 10 digit (maks 9.999.999.999)
         return next.length > 10 ? p : next;
       });
     }
   };
 
-  // Quick amounts — pecahan terdekat ke atas
   const quickAmounts = (() => {
     const denoms = [5000, 10000, 20000, 50000, 100000, 200000, 500000];
     const result = new Set();
-    result.add(totalAmount); // pas
+    result.add(totalAmount);
     for (const d of denoms) {
       const rounded = Math.ceil(totalAmount / d) * d;
       result.add(rounded);
@@ -731,19 +940,15 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      {/* Modal — full-width bottom sheet on mobile, centered card on sm+ */}
       <div className="relative bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden"
         style={{ maxHeight: '96vh' }}>
 
-        {/* Handle — mobile only */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
 
-        {/* Scrollable body */}
         <div className="overflow-y-auto" style={{ maxHeight: 'calc(96vh - 12px)' }}>
 
-          {/* Header */}
           <div className="px-4 pt-3 pb-3 flex items-center justify-between border-b" style={{ borderColor: '#E8ECE4' }}>
             <div>
               <h3 className="font-bold text-base" style={{ color: '#1C1C1A' }}>💳 Pembayaran</h3>
@@ -755,13 +960,11 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
 
           <div className="px-4 pt-3 pb-4 space-y-3">
 
-            {/* Total tagihan */}
             <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#EDF1EA' }}>
               <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Total Tagihan</p>
               <p className="text-xl font-bold" style={{ color: '#658051' }}>{fmt(totalAmount)}</p>
             </div>
 
-            {/* Pilih metode */}
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: 'cash', label: '💵 Cash',  desc: 'Bayar tunai' },
@@ -779,11 +982,8 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
               ))}
             </div>
 
-            {/* ── CASH ── */}
             {method === 'cash' && (
               <div className="space-y-3">
-
-                {/* Display uang diterima */}
                 <div className="rounded-2xl px-4 py-3 border-2 transition"
                   style={{ borderColor: received > 0 ? (change >= 0 ? '#658051' : '#DC2626') : '#E8ECE4', background: '#FAFAF8' }}>
                   <p className="text-xs font-semibold mb-0.5" style={{ color: '#9CA38F' }}>Uang Diterima</p>
@@ -797,7 +997,6 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                   )}
                 </div>
 
-                {/* Quick amounts */}
                 <div>
                   <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>Cepat</p>
                   <div className="grid grid-cols-4 gap-1.5">
@@ -808,9 +1007,8 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                         style={received === amt
                           ? { background: '#658051', color: '#fff', borderColor: '#658051' }
                           : { background: '#FAFAF8', color: '#1C1C1A', borderColor: '#E8ECE4' }}
-                        onMouseEnter={(e) => { if (received !== amt) { e.currentTarget.style.background = '#EDF1EA'; } }}
-                        onMouseLeave={(e) => { if (received !== amt) { e.currentTarget.style.background = '#FAFAF8'; } }}>
-                        {/* Format singkat: 50rb, 100rb, dst */}
+                        onMouseEnter={(e) => { if (received !== amt) e.currentTarget.style.background = '#EDF1EA'; }}
+                        onMouseLeave={(e) => { if (received !== amt) e.currentTarget.style.background = '#FAFAF8'; }}>
                         {amt >= 1000000
                           ? `${(amt / 1000000).toFixed(amt % 1000000 === 0 ? 0 : 1)}jt`
                           : `${amt / 1000}rb`}
@@ -819,9 +1017,7 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                   </div>
                 </div>
 
-                {/* Numpad */}
                 <div className="space-y-2">
-                  {/* Rows 1–4: angka + C + ⌫ */}
                   <div className="grid grid-cols-3 gap-2">
                     {NUMPAD_ROWS.flat().map((key) => {
                       const isBackspace = key === '⌫';
@@ -845,7 +1041,6 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                       );
                     })}
                   </div>
-                  {/* Row 5: 00 dan 000 — tiap tombol setengah lebar */}
                   <div className="grid grid-cols-2 gap-2">
                     {NUMPAD_ZEROS.map((key) => (
                       <button key={key}
@@ -870,7 +1065,6 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
               </div>
             )}
 
-            {/* ── QRIS ── */}
             {method === 'qris' && (
               <div className="rounded-2xl p-5 text-center border-2 border-dashed" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
                 <p className="text-4xl mb-3">📱</p>
@@ -881,7 +1075,6 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
               </div>
             )}
 
-            {/* Confirm + back */}
             <div className="space-y-2 pt-1">
               <button
                 onClick={() => onConfirm(method, received)}
