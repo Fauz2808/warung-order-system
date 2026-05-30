@@ -60,6 +60,23 @@ function concat(...arrays) {
   return out;
 }
 
+// Word-wrap text to fit within `width` chars, returns array of lines
+function wrapText(text, width, indent = '') {
+  const words = text.split(' ');
+  const lines = [];
+  let current = indent;
+  for (const word of words) {
+    if (current.length + word.length + (current === indent ? 0 : 1) <= width) {
+      current += (current === indent ? '' : ' ') + word;
+    } else {
+      if (current !== indent) lines.push(current);
+      current = indent + word;
+    }
+  }
+  if (current !== indent) lines.push(current);
+  return lines;
+}
+
 // Small chunks + generous delay — most BLE thermal printers need this
 async function writeChunked(data) {
   const CHUNK = 100;
@@ -258,14 +275,19 @@ export async function printReceipt(order, kasirName) {
           parts.push(txt(`   +${item.additionalEspressoShots} Espresso Shot\n`));
         }
         if (item.notes) {
-          parts.push(txt(`   ${item.notes.slice(0, W - 3)}\n`));
+          // Max 50 chars, word-wrap to fit 32-char width with 3-space indent
+          const noteText = item.notes.slice(0, 50);
+          const noteLines = wrapText(noteText, W, '   ');
+          for (const line of noteLines) parts.push(txt(line + '\n'));
         }
       }
     }
 
     if (order.notes) {
       parts.push(cmd.lf());
-      parts.push(txt(`Catatan:\n${order.notes.slice(0, W)}\n`));
+      const orderNoteLines = wrapText(order.notes.slice(0, 80), W);
+      parts.push(txt('Catatan:\n'));
+      for (const line of orderNoteLines) parts.push(txt(line + '\n'));
     }
 
     parts.push(
