@@ -17,7 +17,7 @@ const GS  = 0x1d;
 const LF  = 0x0a;
 
 const b   = (...v) => new Uint8Array(v.flat());
-const CHAR_MAP = { '·': '-', '•': '-', '🔥': 'Hot', '🧊': 'Ice', '✓': 'v', '→': '>', '←': '<', '·': '-' };
+const CHAR_MAP = { ' · ': ', ', '·': ',', '•': '-', '🔥': 'Hot', '🧊': 'Ice', '✓': 'v', '→': '>', '←': '<' };
 
 const txt = (s) => {
   // Normalize non-ASCII before encoding
@@ -162,6 +162,7 @@ export async function printReceipt(order, kasirName) {
       cmd.center(), cmd.bold(true), cmd.dblHeight(),
       txt('CARRA COFFEE\n'),
       cmd.normal(), cmd.bold(false),
+      ...(kasirName ? [cmd.center(), txt(`Kasir: ${kasirName.slice(0, 24)}\n`), cmd.left()] : []),
       cmd.lf(),
       cmd.left(),
       divider(),
@@ -171,7 +172,6 @@ export async function printReceipt(order, kasirName) {
       row('Meja:', `${order.table?.number ?? '-'} Lt.${order.table?.floor ?? '-'}`),
       ...(order.customerName ? [row('Customer:', order.customerName.slice(0, 18))] : []),
       row('Tipe:', order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'),
-      ...(kasirName ? [row('Kasir:', kasirName.slice(0, 20))] : []),
       row('Pembayaran:', payment ?? (order.isPaid ? 'LUNAS' : 'BELUM BAYAR')),
       divider(),
     ];
