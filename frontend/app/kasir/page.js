@@ -108,19 +108,27 @@ export default function KasirPage() {
   const handlePrintOrder = async (order) => {
     if (isPrintingNow()) { toast('Sedang mencetak...'); return; }
 
-    // Kalau BT support tapi belum connect — auto-connect dulu, lalu print
+    // Kalau belum connect — coba silent reconnect (remembered device), baru picker
     if (!isPrinterConnected() && typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
       setPrinterConnecting(true);
-      try {
-        const name = await connectPrinter();
-        setPrinterName(name);
-        toast.success(`🖨️ "${name}" terhubung — mencetak struk...`);
-      } catch (err) {
+      // 1. Silent reconnect dulu (tidak buka dialog)
+      const reconnected = await tryAutoReconnect();
+      if (reconnected) {
+        setPrinterName(getConnectedName() || 'Printer');
         setPrinterConnecting(false);
-        toast.error(err.message || 'Gagal menghubungkan printer');
-        return;
+      } else {
+        // 2. Tidak ada remembered device — buka picker
+        try {
+          const name = await connectPrinter();
+          setPrinterName(name);
+          toast.success(`🖨️ "${name}" terhubung!`);
+        } catch (err) {
+          setPrinterConnecting(false);
+          toast.error(err.message || 'Gagal menghubungkan printer');
+          return;
+        }
+        setPrinterConnecting(false);
       }
-      setPrinterConnecting(false);
     }
 
     if (isPrinterConnected()) {

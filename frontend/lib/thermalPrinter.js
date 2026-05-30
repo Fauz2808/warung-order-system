@@ -106,30 +106,63 @@ export async function connectPrinter() {
   );
 
   const server = await device.gatt.connect();
+  const name = await _bindDevice(device, server);
+  if (!name) throw new Error('Printer tidak dikenali. Pastikan printer menyala dan dalam jangkauan.');
+  return name;
+}
 
+// Shared: bind device+char after gatt.connect(), set up auto-reconnect listener
+async function _bindDevice(device, server) {
   for (const p of PROFILES) {
     try {
       const svc = await server.getPrimaryService(p.service);
       const ch  = await svc.getCharacteristic(p.char);
       _char   = ch;
       _device = device;
-      device.addEventListener('gattserverdisconnected', () => {
-        _char = null; _device = null;
-      });
+
+      // Auto-reconnect when printer comes back online (e.g. turned off then on)
+      device.addEventListener('gattserverdisconnected', _onDisconnected);
       return device.name || 'Thermal Printer';
     } catch { /* try next profile */ }
   }
+  return null;
+}
 
-  throw new Error('Printer tidak dikenali. Pastikan printer menyala dan dalam jangkauan.');
+let _reconnectTimer = null;
+
+function _onDisconnected() {
+  _char = null;
+  // Retry silently every 3s up to 10 attempts
+  let attempts = 0;
+  const retry = () => {
+    if (isPrinterConnected() || attempts >= 10) return;
+    attempts++;
+    _reconnectSilent().catch(() => {
+      _reconnectTimer = setTimeout(retry, 3000);
+    });
+  };
+  _reconnectTimer = setTimeout(retry, 3000);
+}
+
+async function _reconnectSilent() {
+  if (!_device) return;
+  try {
+    const server = await _device.gatt.connect();
+    await _bindDevice(_device, server);
+  } catch {
+    throw new Error('retry');
+  }
 }
 
 export function disconnectPrinter() {
+  clearTimeout(_reconnectTimer);
+  if (_device) _device.removeEventListener('gattserverdisconnected', _onDisconnected);
   if (_device?.gatt?.connected) _device.gatt.disconnect();
   _char = null;
   _device = null;
 }
 
-// Auto-reconnect ke printer yang pernah di-pair sebelumnya (tanpa dialog picker)
+// Auto-reconnect to previously paired printer — no picker dialog
 export async function tryAutoReconnect() {
   if (!isBTSupported()) return false;
   if (isPrinterConnected()) return true;
@@ -137,21 +170,13 @@ export async function tryAutoReconnect() {
     const remembered = await navigator.bluetooth.getDevices();
     if (!remembered.length) return false;
 
-    // Ambil printer pertama yang dikenal (biasanya hanya 1)
-    const device = remembered[0];
-    const server = await device.gatt.connect();
-
-    for (const p of PROFILES) {
+    // Try all remembered devices, pick first that works
+    for (const device of remembered) {
       try {
-        const svc = await server.getPrimaryService(p.service);
-        const ch  = await svc.getCharacteristic(p.char);
-        _char   = ch;
-        _device = device;
-        device.addEventListener('gattserverdisconnected', () => {
-          _char = null; _device = null;
-        });
-        return true;
-      } catch { /* try next profile */ }
+        const server = await device.gatt.connect();
+        const name = await _bindDevice(device, server);
+        if (name) return true;
+      } catch { /* try next */ }
     }
     return false;
   } catch {
