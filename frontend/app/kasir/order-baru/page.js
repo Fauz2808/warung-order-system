@@ -163,7 +163,6 @@ export default function OrderBaruPage() {
   // ── Validasi sebelum ke payment ───────────────────
   const handleSubmit = () => {
     if (cart.length === 0) { toast.error('Keranjang kosong!'); return; }
-    if (!selectedTable && orderType === 'dine-in') { toast.error('Pilih meja dulu!'); return; }
 
     const invalidItems = cart.filter((cartItem) => {
       const menuItem = menu.find((m) => m.id === cartItem.menuId);
@@ -179,7 +178,7 @@ export default function OrderBaruPage() {
     }
 
     if (!payNow) {
-      const tableId = orderType === 'take-away' ? (tables[0]?.id || 1) : parseInt(selectedTable);
+      const tableId = orderType === 'take-away' || !selectedTable ? (tables[0]?.id || 1) : parseInt(selectedTable);
       orderMutation.mutate({
         tableId,
         orderType,
@@ -208,7 +207,7 @@ export default function OrderBaruPage() {
 
   // ── Final submit setelah payment confirmed ────────
   const handleConfirmPayment = (paymentMethod, receivedAmount) => {
-    const tableId = orderType === 'take-away' ? (tables[0]?.id || 1) : parseInt(selectedTable);
+    const tableId = orderType === 'take-away' || !selectedTable ? (tables[0]?.id || 1) : parseInt(selectedTable);
     const paymentNote = paymentMethod === 'cash'
       ? `[Bayar Cash: ${formatRupiah(receivedAmount)}, Kembalian: ${formatRupiah(receivedAmount - totalAmount)}]`
       : '[Bayar QRIS]';
@@ -339,12 +338,14 @@ export default function OrderBaruPage() {
         {/* Pilih meja */}
         {orderType === 'dine-in' && (
           <div>
-            <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>Nomor Meja</p>
+            <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>
+              Nomor Meja <span className="font-normal" style={{ color: '#9CA38F' }}>(opsional)</span>
+            </p>
             {loadingTables ? <p className="text-xs" style={{ color: '#9CA38F' }}>Memuat...</p> : (
               <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)}
                 className="w-full rounded-xl px-3 py-2 text-sm outline-none border"
                 style={{ border: '1px solid #E8ECE4', color: selectedTable ? '#1C1C1A' : '#9CA38F', background: '#FAFAF8' }}>
-                <option value="">-- Pilih Meja --</option>
+                <option value="">-- Belum ditentukan --</option>
                 {tables.map((t) => (
                   <option key={t.id} value={t.id}>Meja {t.number} · Lantai {t.floor}</option>
                 ))}
