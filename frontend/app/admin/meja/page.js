@@ -7,8 +7,9 @@ import toast from 'react-hot-toast';
 import { QRCodeCanvas } from 'qrcode.react';
 import { getTables, createTable, deleteTable } from '@/lib/api';
 
-// Gunakan origin browser saat ini — selalu benar di dev maupun production
-const BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
+// Gunakan NEXT_PUBLIC_APP_URL jika ada (production), fallback ke window.location.origin
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
 
 export default function AdminMejaPage() {
   const queryClient = useQueryClient();
