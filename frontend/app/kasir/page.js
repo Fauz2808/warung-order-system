@@ -126,7 +126,7 @@ export default function KasirPage() {
     if (isPrinterConnected()) {
       const tid = toast.loading('🖨️ Mencetak struk...');
       try {
-        await printReceipt(order);
+        await printReceipt(order, user?.name || user?.username);
         toast.success('🖨️ Struk dicetak!', { id: tid });
       } catch (err) {
         toast.error(err.message || 'Gagal cetak', { id: tid });

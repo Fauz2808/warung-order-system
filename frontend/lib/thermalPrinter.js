@@ -17,12 +17,17 @@ const GS  = 0x1d;
 const LF  = 0x0a;
 
 const b   = (...v) => new Uint8Array(v.flat());
+const CHAR_MAP = { '·': '-', '•': '-', '🔥': 'Hot', '🧊': 'Ice', '✓': 'v', '→': '>', '←': '<', '·': '-' };
+
 const txt = (s) => {
-  // Encode to ASCII, replace non-ASCII with '?'
+  // Normalize non-ASCII before encoding
+  let clean = s;
+  for (const [from, to] of Object.entries(CHAR_MAP)) clean = clean.replaceAll(from, to);
+  // Remove remaining non-ASCII (emoji, etc.)
   const out = [];
-  for (const ch of s) {
+  for (const ch of clean) {
     const code = ch.charCodeAt(0);
-    out.push(code < 128 ? code : 0x3f);
+    if (code < 128) out.push(code);
   }
   return new Uint8Array(out);
 };
@@ -129,11 +134,26 @@ const fmtDate = (s) => {
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
-export async function printReceipt(order) {
+// Detect payment method from order notes (format: "[Bayar Cash: ...]" or "[Bayar QRIS]")
+function detectPayment(order) {
+  if (!order.isPaid) return null;
+  const notes = order.notes || '';
+  if (notes.includes('QRIS')) return 'QRIS';
+  if (notes.includes('Cash')) {
+    // extract "Rp X" from "[Bayar Cash: Rp X, Kembalian: Rp Y]"
+    const m = notes.match(/Bayar Cash: (Rp [\d.,]+)/);
+    return m ? `Cash (${m[1]})` : 'Cash';
+  }
+  return 'Lunas';
+}
+
+export async function printReceipt(order, kasirName) {
   if (!isPrinterConnected()) throw new Error('Printer belum terhubung');
   if (_printing) throw new Error('Sedang mencetak, tunggu sebentar');
 
   _printing = true;
+  const payment = detectPayment(order);
+
   try {
     const parts = [
       cmd.init(),
@@ -151,7 +171,8 @@ export async function printReceipt(order) {
       row('Meja:', `${order.table?.number ?? '-'} Lt.${order.table?.floor ?? '-'}`),
       ...(order.customerName ? [row('Customer:', order.customerName.slice(0, 18))] : []),
       row('Tipe:', order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'),
-      row('Status:', order.isPaid ? 'LUNAS' : 'BELUM BAYAR'),
+      ...(kasirName ? [row('Kasir:', kasirName.slice(0, 20))] : []),
+      row('Pembayaran:', payment ?? (order.isPaid ? 'LUNAS' : 'BELUM BAYAR')),
       divider(),
     ];
 
