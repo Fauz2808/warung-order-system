@@ -210,8 +210,8 @@ export default function PengaturanPage() {
         </p>
       </div>
 
-      {/* Status card — owner only */}
-      {isOwner && <div
+      {/* Status card — semua staff bisa lihat dan toggle */}
+      {<div
         className="rounded-2xl border p-5"
         style={
           isCurrentlyOpen
@@ -265,7 +265,7 @@ export default function PengaturanPage() {
             </p>
           </div>
         )}
-      </div>}
+      </div>
 
       {/* Notifikasi */}
       <NotifToggle />
