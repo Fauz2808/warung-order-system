@@ -84,6 +84,8 @@ export default function KasirPage() {
   const [notifPermission, setNotifPermission] = useState('default');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dismissedLowStock, setDismissedLowStock] = useState(false);
+  const [payModalOrder, setPayModalOrder] = useState(null);
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
   const queryClient = useQueryClient();
 
   // Cek & minta permission notifikasi saat pertama kali load
@@ -167,6 +169,17 @@ export default function KasirPage() {
       toast.success(`${ids.length} order → ${STATUS_CONFIG[status]?.label}`);
     },
     onError: () => toast.error('Gagal bulk update'),
+  });
+
+  // Mark paid — di KasirPage supaya modal render di root (fix stacking context dari swipe transform)
+  const rootMarkPaidMutation = useMutation({
+    mutationFn: ({ id, notes }) => markOrderPaid(id, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast.success(`Order #${payModalOrder?.id} ditandai lunas ✅`);
+      setPayModalOrder(null);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal update status bayar'),
   });
 
   // Query menu untuk low stock alert
@@ -434,6 +447,8 @@ export default function KasirPage() {
                 next.has(id) ? next.delete(id) : next.add(id);
                 return next;
               })}
+              onOpenPayModal={(order) => setPayModalOrder(order)}
+              onOpenInvoice={(order) => setInvoiceOrder(order)}
             />
           ))
         )}
@@ -466,6 +481,19 @@ export default function KasirPage() {
         </div>
       )}
     </div>
+
+    {/* Root-level modals — di luar card DOM supaya tidak kena stacking context dari swipe transform */}
+    {payModalOrder && (
+      <QuickPayModal
+        order={payModalOrder}
+        onConfirm={(notes) => rootMarkPaidMutation.mutate({ id: payModalOrder.id, notes })}
+        onClose={() => setPayModalOrder(null)}
+        isPending={rootMarkPaidMutation.isPending}
+      />
+    )}
+    {invoiceOrder && (
+      <InvoiceModal order={invoiceOrder} onClose={() => setInvoiceOrder(null)} />
+    )}
     </StaffLayout>
   );
 }
@@ -474,14 +502,11 @@ export default function KasirPage() {
 const getWaitMinutes = (dateStr) => Math.floor((Date.now() - new Date(dateStr)) / 60000);
 
 // ─── Komponen OrderCard ───────────────────────────────
-function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect }) {
+function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect, onOpenPayModal, onOpenInvoice }) {
   const [expanded, setExpanded] = useState(true);
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [showInvoice, setShowInvoice] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const touchStartX = useRef(null);
-  const queryClient = useQueryClient();
 
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const nextStatus = cfg.next;
@@ -507,15 +532,6 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
     touchStartX.current = null;
   };
 
-  const markPaidMutation = useMutation({
-    mutationFn: ({ notes }) => markOrderPaid(order.id, notes),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast.success(`Order #${order.id} ditandai lunas ✅`);
-      setShowPayModal(false);
-    },
-    onError: (err) => toast.error(err.response?.data?.message || 'Gagal update status bayar'),
-  });
   const waitMins = getWaitMinutes(order.createdAt);
   const isUrgent = ['pending', 'preparing'].includes(order.status) && waitMins >= 10;
   const isWarning = ['pending', 'preparing'].includes(order.status) && waitMins >= 5 && waitMins < 10;
@@ -655,7 +671,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
           )}
           {/* Tombol invoice */}
           <button
-            onClick={(e) => { e.stopPropagation(); setShowInvoice(true); }}
+            onClick={(e) => { e.stopPropagation(); onOpenInvoice(order); }}
             className="w-8 h-8 flex items-center justify-center rounded-xl border text-base transition shrink-0"
             style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
             title="Lihat Invoice"
@@ -737,7 +753,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
           {/* Tombol Tandai Lunas — muncul jika belum bayar */}
           {!order.isPaid && (
             <button
-              onClick={() => setShowPayModal(true)}
+              onClick={() => onOpenPayModal(order)}
               className="w-full mt-2 py-2.5 rounded-xl font-bold text-sm transition border-2"
               style={{ borderColor: '#F59E0B', color: '#92400E', background: '#FFFBEB' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#FEF3C7'}
@@ -748,20 +764,6 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
         </div>
       )}
 
-      {/* Mini payment modal untuk tandai lunas */}
-      {showPayModal && (
-        <QuickPayModal
-          order={order}
-          onConfirm={(notes) => markPaidMutation.mutate({ notes })}
-          onClose={() => setShowPayModal(false)}
-          isPending={markPaidMutation.isPending}
-        />
-      )}
-
-      {/* Invoice modal */}
-      {showInvoice && (
-        <InvoiceModal order={order} onClose={() => setShowInvoice(false)} />
-      )}
     </div>
     </div>
   );
