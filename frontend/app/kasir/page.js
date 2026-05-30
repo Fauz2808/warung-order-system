@@ -376,14 +376,14 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-xs" style={{ color: '#9CA38F' }}>Pendapatan hari ini</p>
-            <p className="text-lg font-bold" style={{ color: '#658051' }}>{formatRupiah(todayRevenue)}</p>
+            <p className="text-xs" style={{ color: '#9CA38F' }}>Total order hari ini</p>
+            <p className="text-lg font-bold" style={{ color: '#658051' }}>{orders.length} order</p>
           </div>
-          {/* Printer connect toggle */}
+          {/* Printer connect toggle — desktop only (Web Bluetooth tidak support iOS/mobile) */}
           <button
             onClick={handleConnectPrinter}
             disabled={printerConnecting}
-            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm border transition"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm border transition"
             style={printerName
               ? { background: '#EDF1EA', borderColor: '#658051', color: '#658051' }
               : { background: '#F7F7F5', borderColor: '#E8ECE4', color: '#6B7560' }}
