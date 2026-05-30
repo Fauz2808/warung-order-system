@@ -275,11 +275,20 @@ export default function MejaPage() {
               </button>
             </>
           ) : (
-            <p className="text-center text-xs py-1" style={{ color: '#9CA38F' }}>
-              Mohon tunggu, kami sedang menyiapkan pesananmu ☕
-              <br />
-              <span style={{ color: '#C4C9BD' }}>Halaman ini otomatis update</span>
-            </p>
+            <div className="space-y-3">
+              <p className="text-center text-xs py-1" style={{ color: '#9CA38F' }}>
+                Mohon tunggu, kami sedang menyiapkan pesananmu ☕
+                <br />
+                <span style={{ color: '#C4C9BD' }}>Halaman ini otomatis update</span>
+              </p>
+              <button
+                onClick={() => setOrderSuccess(null)}
+                className="w-full py-3 rounded-2xl font-semibold text-sm transition active:scale-95 border-2"
+                style={{ borderColor: PRIMARY, color: PRIMARY, background: 'transparent' }}
+              >
+                + Tambah Pesanan
+              </button>
+            </div>
           )}
         </div>
       </div>
