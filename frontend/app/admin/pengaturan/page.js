@@ -13,24 +13,36 @@ const EMPTY_PW_FORM    = { currentPassword: '', newPassword: '', confirmPassword
 
 function NotifToggle() {
   const [permission, setPermission] = useState('default');
+  const [isIOS, setIsIOS] = useState(false);
+  const [isPWA, setIsPWA] = useState(false);
 
   useEffect(() => {
     if ('Notification' in window) setPermission(Notification.permission);
+    // Detect iOS/iPadOS
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(ios);
+    // Detect standalone PWA
+    setIsPWA(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
   }, []);
 
+  const notSupported = !('Notification' in window) || (isIOS && !isPWA);
+
   const handleToggle = async () => {
-    if (!('Notification' in window)) {
-      toast.error('Browser kamu tidak mendukung notifikasi');
+    if (notSupported) return; // button disabled
+    if (permission === 'granted') {
+      toast('Untuk menonaktifkan, ubah di pengaturan browser.', { icon: 'ℹ️' });
       return;
     }
-    if (permission === 'granted') {
-      toast('Untuk menonaktifkan, ubah di pengaturan browser kamu.', { icon: 'ℹ️' });
+    if (permission === 'denied') {
+      toast.error('Notifikasi sudah diblokir. Buka pengaturan browser untuk mengizinkan kembali.');
       return;
     }
     const result = await Notification.requestPermission();
     setPermission(result);
     if (result === 'granted') toast.success('Notifikasi diaktifkan! 🔔');
     else if (result === 'denied') toast.error('Notifikasi diblokir. Ubah di pengaturan browser.');
+    else toast('Izin notifikasi belum diberikan.', { icon: 'ℹ️' });
   };
 
   const isGranted = permission === 'granted';
@@ -42,39 +54,53 @@ function NotifToggle() {
       <p className="text-xs mb-4" style={{ color: '#9CA38F' }}>
         Terima alert suara + popup saat order baru masuk, meski tab kasir sedang tidak aktif.
       </p>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
-            style={{ background: isGranted ? '#EDF1EA' : isDenied ? '#FEF2F2' : '#FFF8EC' }}>
-            {isGranted ? '🔔' : isDenied ? '🔕' : '🔕'}
-          </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>
-              {isGranted ? 'Notifikasi Aktif' : isDenied ? 'Notifikasi Diblokir' : 'Notifikasi Belum Diaktifkan'}
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: isDenied ? '#DC2626' : '#9CA38F' }}>
-              {isGranted
-                ? 'Suara + popup browser aktif saat order masuk'
-                : isDenied
-                ? 'Buka Site Settings di browser → izinkan notifikasi'
-                : 'Klik toggle untuk mengaktifkan'}
-            </p>
-          </div>
+
+      {/* iOS not in PWA — special message */}
+      {isIOS && !isPWA ? (
+        <div className="rounded-xl px-4 py-3 text-xs space-y-1" style={{ background: '#FFF8EC', border: '1px solid #FCD34D' }}>
+          <p className="font-semibold" style={{ color: '#92400E' }}>⚠️ Perlu install sebagai PWA</p>
+          <p style={{ color: '#78350F' }}>
+            Di iOS/iPadOS, notifikasi web hanya tersedia saat app di-install ke Home Screen.
+            Buka <strong>carracoffee.my.id/kasir</strong> di Safari → tap tombol Share → <strong>Add to Home Screen</strong>.
+          </p>
         </div>
-        <button
-          onClick={handleToggle}
-          className="relative inline-flex h-7 w-14 items-center rounded-full transition flex-shrink-0"
-          style={{ backgroundColor: isGranted ? '#658051' : '#E8ECE4' }}
-        >
-          <span
-            className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform"
-            style={{ transform: isGranted ? 'translateX(32px)' : 'translateX(4px)' }}
-          />
-        </button>
-      </div>
-      {isDenied && (
+      ) : (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+              style={{ background: isGranted ? '#EDF1EA' : isDenied ? '#FEF2F2' : '#FFF8EC' }}>
+              {isGranted ? '🔔' : '🔕'}
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>
+                {isGranted ? 'Notifikasi Aktif' : isDenied ? 'Notifikasi Diblokir' : 'Notifikasi Belum Diaktifkan'}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: isDenied ? '#DC2626' : '#9CA38F' }}>
+                {isGranted
+                  ? 'Suara + popup browser aktif saat order masuk'
+                  : isDenied
+                  ? 'Buka Site Settings di browser → izinkan notifikasi'
+                  : 'Tap toggle untuk mengaktifkan'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={notSupported}
+            className="relative inline-flex h-7 w-14 items-center rounded-full transition flex-shrink-0 disabled:opacity-40"
+            style={{ backgroundColor: isGranted ? '#658051' : '#E8ECE4' }}
+          >
+            <span
+              className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform"
+              style={{ transform: isGranted ? 'translateX(32px)' : 'translateX(4px)' }}
+            />
+          </button>
+        </div>
+      )}
+
+      {isDenied && !isIOS && (
         <div className="mt-3 rounded-xl px-4 py-3 text-xs" style={{ background: '#FEF2F2', color: '#DC2626' }}>
-          Browser memblokir notifikasi untuk site ini. Klik ikon 🔒 di address bar → <strong>Notifications → Allow</strong>, lalu refresh halaman.
+          Browser memblokir notifikasi. Klik ikon 🔒 di address bar → <strong>Notifications → Allow</strong>, lalu refresh halaman.
         </div>
       )}
     </div>
