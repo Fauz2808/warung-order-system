@@ -156,13 +156,29 @@ export default function KasirPage() {
     onError: () => toast.error('Gagal mengubah status'),
   });
 
+  // Tick setiap menit — paksa re-render supaya timer di order cards update real-time
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
   // Tampilkan loading sementara auth di-cek
   if (loading) return <LoadingAuth />;
+
+  // Urgency score — urgent (≥10m) naik paling atas, warning (≥5m) di tengah
+  const urgencyScore = (o) => {
+    if (!['pending', 'preparing'].includes(o.status)) return 99;
+    const m = getWaitMinutes(o.createdAt);
+    if (m >= 10) return 0;
+    if (m >= 5)  return 1;
+    return 2;
+  };
 
   // Urutan prioritas status — yang belum selesai muncul duluan
   const STATUS_PRIORITY = { pending: 0, preparing: 1, done: 2, cancelled: 3 };
 
-  // Filter orders berdasarkan semua filter aktif, lalu sort by priority
+  // Filter orders berdasarkan semua filter aktif, lalu sort by urgency → priority → time
   const filteredOrders = orders
     .filter((o) => {
       const statusMatch = activeStatus === 'semua' || o.status === activeStatus;
@@ -172,6 +188,8 @@ export default function KasirPage() {
       return statusMatch && floorMatch && paymentMatch && typeMatch;
     })
     .sort((a, b) => {
+      const urgDiff = urgencyScore(a) - urgencyScore(b);
+      if (urgDiff !== 0) return urgDiff;
       const pDiff = (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9);
       if (pDiff !== 0) return pDiff;
       return new Date(a.createdAt) - new Date(b.createdAt);
@@ -407,7 +425,21 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
         background: '#FFFFFF',
         borderColor: isUrgent ? '#EF4444' : isWarning ? '#F59E0B' : '#E8ECE4',
         borderWidth: isUrgent || isWarning ? '2px' : '1px',
+        boxShadow: isUrgent ? '0 0 0 3px rgba(239,68,68,0.15)' : isWarning ? '0 0 0 3px rgba(245,158,11,0.12)' : undefined,
       }}>
+      {/* Strip atas untuk urgent/warning */}
+      {isUrgent && (
+        <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold animate-pulse"
+          style={{ background: '#EF4444', color: '#fff' }}>
+          <span>🔴</span> Menunggu {waitMins} menit — segera proses!
+        </div>
+      )}
+      {isWarning && !isUrgent && (
+        <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-semibold"
+          style={{ background: '#FEF3C7', color: '#92400E' }}>
+          <span>⚠️</span> Menunggu {waitMins} menit
+        </div>
+      )}
       {/* Header order */}
       <div
         className="flex items-center justify-between px-4 py-3 cursor-pointer transition"
