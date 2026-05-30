@@ -2,7 +2,7 @@
 // app/kasir/page.js
 // Dashboard kasir — terima order real-time, update status
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -402,7 +402,34 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
   const [expanded, setExpanded] = useState(true);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartX = useRef(null);
   const queryClient = useQueryClient();
+
+  const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+  const nextStatus = cfg.next;
+
+  // ── Swipe handlers ──────────────────────────────────
+  const handleTouchStart = (e) => {
+    if (!nextStatus || isUpdating) return;
+    touchStartX.current = e.touches[0].clientX;
+    setIsSwiping(true);
+  };
+  const handleTouchMove = (e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    // Max swipe 80px
+    setSwipeX(Math.max(-80, Math.min(80, dx)));
+  };
+  const handleTouchEnd = () => {
+    if (Math.abs(swipeX) >= 60 && nextStatus) {
+      onUpdateStatus(nextStatus);
+    }
+    setSwipeX(0);
+    setIsSwiping(false);
+    touchStartX.current = null;
+  };
 
   const markPaidMutation = useMutation({
     mutationFn: ({ notes }) => markOrderPaid(order.id, notes),
@@ -413,20 +440,45 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal update status bayar'),
   });
-  const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const waitMins = getWaitMinutes(order.createdAt);
-  // Order pending/preparing yang sudah nunggu > 10 menit = urgent
   const isUrgent = ['pending', 'preparing'].includes(order.status) && waitMins >= 10;
   const isWarning = ['pending', 'preparing'].includes(order.status) && waitMins >= 5 && waitMins < 10;
 
+  // Swipe hint label
+  const swipeThreshold = 60;
+  const swipeTriggered = Math.abs(swipeX) >= swipeThreshold;
+  const swipeLabel = nextStatus === 'preparing' ? '👨‍🍳 Proses' : nextStatus === 'done' ? '✓ Selesai' : null;
+
   return (
-    <div className="rounded-2xl shadow-sm border overflow-hidden transition"
-      style={{
-        background: '#FFFFFF',
-        borderColor: isUrgent ? '#EF4444' : isWarning ? '#F59E0B' : '#E8ECE4',
-        borderWidth: isUrgent || isWarning ? '2px' : '1px',
-        boxShadow: isUrgent ? '0 0 0 3px rgba(239,68,68,0.15)' : isWarning ? '0 0 0 3px rgba(245,158,11,0.12)' : undefined,
-      }}>
+    <div className="relative overflow-hidden rounded-2xl"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}>
+      {/* Swipe background hint */}
+      {isSwiping && swipeLabel && (
+        <div className="absolute inset-0 flex items-center rounded-2xl px-6"
+          style={{
+            background: swipeTriggered
+              ? (nextStatus === 'done' ? '#658051' : '#2563EB')
+              : '#F3F4F6',
+            justifyContent: swipeX > 0 ? 'flex-start' : 'flex-end',
+            zIndex: 0,
+          }}>
+          <span className="font-bold text-sm" style={{ color: swipeTriggered ? '#fff' : '#9CA38F' }}>
+            {swipeX > 0 ? swipeLabel : swipeLabel}
+          </span>
+        </div>
+      )}
+      <div className="rounded-2xl shadow-sm border overflow-hidden transition relative"
+        style={{
+          background: '#FFFFFF',
+          transform: `translateX(${swipeX}px)`,
+          transition: isSwiping ? 'none' : 'transform 0.3s ease',
+          zIndex: 1,
+          borderColor: isUrgent ? '#EF4444' : isWarning ? '#F59E0B' : '#E8ECE4',
+          borderWidth: isUrgent || isWarning ? '2px' : '1px',
+          boxShadow: isUrgent ? '0 0 0 3px rgba(239,68,68,0.15)' : isWarning ? '0 0 0 3px rgba(245,158,11,0.12)' : undefined,
+        }}>
       {/* Strip atas untuk urgent/warning */}
       {isUrgent && (
         <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold animate-pulse"
@@ -501,7 +553,21 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
             <p className="font-bold" style={{ color: '#658051' }}>{formatRupiah(order.totalAmount)}</p>
             <p className="text-xs" style={{ color: '#9CA38F' }}>{order.items?.length} item</p>
           </div>
-          {/* Tombol invoice — stop propagation supaya tidak toggle expanded */}
+          {/* Quick action button — langsung update status tanpa expand */}
+          {nextStatus && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onUpdateStatus(nextStatus); }}
+              disabled={isUpdating}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-bold text-white transition shrink-0 disabled:opacity-50"
+              style={{
+                background: nextStatus === 'done' ? '#658051' : '#2563EB',
+              }}
+              title={cfg.nextLabel}
+            >
+              {nextStatus === 'done' ? '✓' : '▶'} {cfg.nextLabel}
+            </button>
+          )}
+          {/* Tombol invoice */}
           <button
             onClick={(e) => { e.stopPropagation(); setShowInvoice(true); }}
             className="w-8 h-8 flex items-center justify-center rounded-xl border text-base transition shrink-0"
@@ -610,6 +676,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
       {showInvoice && (
         <InvoiceModal order={order} onClose={() => setShowInvoice(false)} />
       )}
+    </div>
     </div>
   );
 }
