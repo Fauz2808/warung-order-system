@@ -29,6 +29,7 @@ export default function MejaPage() {
   const [addItemModal, setAddItemModal] = useState(null);
   const [orderType, setOrderType] = useState('dine-in');
   const [customerName, setCustomerName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { items, addItem, removeItem, updateTemperature, getTotal, getTotalItems, clearCart, setTable } = useCartStore();
   const queryClient = useQueryClient();
@@ -131,7 +132,9 @@ export default function MejaPage() {
     toast.success(`${addItemModal.name} ditambahkan!`, { duration: 1500 });
   };
 
-  const filteredMenu = activeCategory === 'semua' ? menu : menu.filter((m) => m.category === activeCategory);
+  const filteredMenu = menu
+    .filter((m) => activeCategory === 'semua' || m.category === activeCategory)
+    .filter((m) => !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const categories = [
     { value: 'semua',      label: 'Semua',      emoji: '✦' },
@@ -341,6 +344,33 @@ export default function MejaPage() {
               >
                 {getTotalItems()}
               </span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Search bar ──────────────────────────── */}
+      <div className="px-4 pb-3">
+        <div className="relative">
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base" style={{ color: '#9CA38F' }}>🔍</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari menu..."
+            className="w-full pl-10 pr-10 py-3 rounded-2xl text-sm outline-none transition"
+            style={{
+              background: '#fff',
+              border: `1.5px solid ${searchQuery ? PRIMARY : '#E8ECE4'}`,
+              color: '#1C1C1A',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+              style={{ background: '#E8ECE4', color: '#6B7560' }}>
+              ✕
             </button>
           )}
         </div>

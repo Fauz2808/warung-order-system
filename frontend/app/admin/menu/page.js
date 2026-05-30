@@ -22,6 +22,7 @@ export default function AdminMenuPage() {
   const [editData, setEditData] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [filterCat, setFilterCat] = useState('semua');
+  const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [uploadTarget, setUploadTarget] = useState(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -200,7 +201,9 @@ export default function AdminMenuPage() {
     }
   };
 
-  const filtered = filterCat === 'semua' ? menu : menu.filter((m) => m.category === filterCat);
+  const filtered = menu
+    .filter((m) => filterCat === 'semua' || m.category === filterCat)
+    .filter((m) => !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // Hitung per kategori untuk badge
   const counts = categories.reduce((acc, c) => {
@@ -221,6 +224,25 @@ export default function AdminMenuPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Search bar */}
+          <div className="relative hidden sm:block">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#9CA38F' }}>🔍</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari menu..."
+              className="pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none border w-48 transition"
+              style={{ borderColor: searchQuery ? '#658051' : '#E8ECE4', background: '#fff', color: '#1C1C1A' }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+              onBlur={(e) => e.currentTarget.style.borderColor = searchQuery ? '#658051' : '#E8ECE4'}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+                style={{ color: '#9CA38F' }}>✕</button>
+            )}
+          </div>
           <button
             onClick={() => setShowCategoryModal(true)}
             className="px-4 py-2.5 rounded-xl font-semibold text-sm transition flex items-center gap-2 border"
