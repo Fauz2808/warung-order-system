@@ -10,7 +10,7 @@ const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'warung-secret-ganti-ini-nanti';
-const JWT_EXPIRES = '12h';
+const JWT_EXPIRES = '365d';
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
