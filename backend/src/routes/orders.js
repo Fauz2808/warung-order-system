@@ -315,4 +315,32 @@ router.patch('/:id/mark-paid', async (req, res) => {
   }
 });
 
+// PUT /api/orders/bulk-status — update status banyak order sekaligus (kasir)
+// Body: { ids: [1,2,3], status: "preparing" }
+router.put('/bulk-status', async (req, res) => {
+  try {
+    const { ids, status } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || !status) {
+      return res.status(400).json({ success: false, message: 'ids dan status wajib diisi' });
+    }
+    const validStatuses = ['pending', 'preparing', 'done', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Status tidak valid' });
+    }
+
+    await prisma.order.updateMany({
+      where: { id: { in: ids.map(Number) } },
+      data: { status, updatedAt: new Date() },
+    });
+
+    if (req.io) {
+      req.io.emit('order:bulk_status_update', { ids, status });
+    }
+
+    res.json({ success: true, message: `${ids.length} order diperbarui ke ${status}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Gagal update bulk status' });
+  }
+});
+
 module.exports = router;

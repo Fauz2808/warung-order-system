@@ -52,6 +52,8 @@ export const createOrder = (data) => api.post('/orders', data).then((r) => r.dat
 export const getOrders = (params) => api.get('/orders', { params }).then((r) => r.data.data);
 export const updateOrderStatus = (id, status) =>
   api.put(`/orders/${id}/status`, { status }).then((r) => r.data);
+export const bulkUpdateStatus = (ids, status) =>
+  api.put('/orders/bulk-status', { ids, status }).then((r) => r.data);
 export const markOrderPaid = (id, notes) =>
   api.patch(`/orders/${id}/mark-paid`, { notes }).then((r) => r.data);
 

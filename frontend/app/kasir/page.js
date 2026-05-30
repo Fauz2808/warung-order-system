@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getOrders, updateOrderStatus, markOrderPaid } from '@/lib/api';
+import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
@@ -77,11 +77,13 @@ function flashTabTitle(count = 6) {
 export default function KasirPage() {
   const { user, loading, logout } = useAuth(); // proteksi halaman
   const router = useRouter();
-  const [activeStatus, setActiveStatus] = useState('semua'); // semua | pending | preparing | done
+  const [activeStatus, setActiveStatus] = useState('semua');
   const [activeFloor, setActiveFloor] = useState('semua');
-  const [activePayment, setActivePayment] = useState('semua'); // semua | unpaid | paid
-  const [activeType, setActiveType] = useState('semua'); // semua | dine-in | take-away
+  const [activePayment, setActivePayment] = useState('semua');
+  const [activeType, setActiveType] = useState('semua');
   const [notifPermission, setNotifPermission] = useState('default');
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [dismissedLowStock, setDismissedLowStock] = useState(false);
   const queryClient = useQueryClient();
 
   // Cek & minta permission notifikasi saat pertama kali load
@@ -155,6 +157,28 @@ export default function KasirPage() {
     },
     onError: () => toast.error('Gagal mengubah status'),
   });
+
+  // Bulk update status
+  const bulkMutation = useMutation({
+    mutationFn: ({ ids, status }) => bulkUpdateStatus(ids, status),
+    onSuccess: (_, { ids, status }) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      setSelectedIds(new Set());
+      toast.success(`${ids.length} order → ${STATUS_CONFIG[status]?.label}`);
+    },
+    onError: () => toast.error('Gagal bulk update'),
+  });
+
+  // Query menu untuk low stock alert
+  const { data: menuItems = [] } = useQuery({
+    queryKey: ['menu-kasir'],
+    queryFn: getMenu,
+    refetchInterval: 60000,
+    enabled: !loading,
+  });
+  const lowStockItems = menuItems.filter(
+    (m) => m.stock !== null && m.stock <= 3 && m.isAvailable
+  );
 
   // Tick setiap menit — paksa re-render supaya timer di order cards update real-time
   const [, setTick] = useState(0);
@@ -260,6 +284,25 @@ export default function KasirPage() {
               Izinkan
             </button>
           )}
+        </div>
+      )}
+
+      {/* Low stock alert */}
+      {!dismissedLowStock && lowStockItems.length > 0 && (
+        <div className="px-4 lg:px-6 py-2.5 flex items-center justify-between gap-3"
+          style={{ background: '#FFF8EC', borderBottom: '1px solid #FDE68A' }}>
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <span className="shrink-0">⚠️</span>
+            <span className="font-semibold" style={{ color: '#92660A' }}>Stok hampir habis:</span>
+            <span className="truncate" style={{ color: '#78350F' }}>
+              {lowStockItems.map((m) => `${m.name} (sisa ${m.stock})`).join(' · ')}
+            </span>
+          </div>
+          <button onClick={() => setDismissedLowStock(true)}
+            className="text-xs shrink-0 px-2 py-1 rounded-lg font-medium transition"
+            style={{ color: '#92660A', background: '#FDE68A' }}>
+            Tutup
+          </button>
         </div>
       )}
 
@@ -385,10 +428,43 @@ export default function KasirPage() {
               order={order}
               onUpdateStatus={(status) => statusMutation.mutate({ id: order.id, status })}
               isUpdating={statusMutation.isPending}
+              isSelected={selectedIds.has(order.id)}
+              onToggleSelect={(id) => setSelectedIds((prev) => {
+                const next = new Set(prev);
+                next.has(id) ? next.delete(id) : next.add(id);
+                return next;
+              })}
             />
           ))
         )}
       </div>
+
+      {/* Floating bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl"
+          style={{ background: '#1C1C1A', minWidth: '320px' }}>
+          <span className="text-white font-semibold text-sm flex-1">
+            {selectedIds.size} order dipilih
+          </span>
+          {['preparing', 'done'].map((s) => (
+            <button key={s}
+              onClick={() => bulkMutation.mutate({ ids: Array.from(selectedIds), status: s })}
+              disabled={bulkMutation.isPending}
+              className="px-3 py-2 rounded-xl text-xs font-bold transition disabled:opacity-50"
+              style={{
+                background: s === 'done' ? '#658051' : '#2563EB',
+                color: '#fff',
+              }}>
+              {s === 'done' ? '✓ Selesai' : '▶ Proses'}
+            </button>
+          ))}
+          <button onClick={() => setSelectedIds(new Set())}
+            className="px-3 py-2 rounded-xl text-xs font-semibold"
+            style={{ background: '#374151', color: '#D1D5DB' }}>
+            Batal
+          </button>
+        </div>
+      )}
     </div>
     </StaffLayout>
   );
@@ -398,7 +474,7 @@ export default function KasirPage() {
 const getWaitMinutes = (dateStr) => Math.floor((Date.now() - new Date(dateStr)) / 60000);
 
 // ─── Komponen OrderCard ───────────────────────────────
-function OrderCard({ order, onUpdateStatus, isUpdating }) {
+function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(true);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
@@ -501,6 +577,16 @@ function OrderCard({ order, onUpdateStatus, isUpdating }) {
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
+          {/* Checkbox bulk select */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(order.id); }}
+            className="w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition"
+            style={{
+              borderColor: isSelected ? '#658051' : '#D1D5DB',
+              background: isSelected ? '#658051' : 'transparent',
+            }}>
+            {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+          </button>
           {/* Status dot */}
           <div className={`w-3 h-3 rounded-full ${cfg.dot} shrink-0 ${order.status !== 'done' ? 'animate-pulse' : ''}`} />
           <div className="min-w-0">
