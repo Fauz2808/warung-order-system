@@ -229,7 +229,7 @@ export default function KasirPage() {
       if (urgDiff !== 0) return urgDiff;
       const pDiff = (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9);
       if (pDiff !== 0) return pDiff;
-      return new Date(a.createdAt) - new Date(b.createdAt);
+      return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
   // Hitung jumlah order per status (untuk badge di stat cards)
@@ -669,15 +669,15 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
               {nextStatus === 'done' ? '✓' : '▶'} {cfg.nextLabel}
             </button>
           )}
-          {/* Tombol invoice */}
+          {/* Tombol print langsung ke thermal printer */}
           <button
-            onClick={(e) => { e.stopPropagation(); onOpenInvoice(order); }}
+            onClick={(e) => { e.stopPropagation(); handleDirectPrint(order); }}
             className="w-8 h-8 flex items-center justify-center rounded-xl border text-base transition shrink-0"
             style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
-            title="Lihat Invoice"
+            title="Print Invoice"
             onMouseEnter={(e) => { e.currentTarget.style.background = '#EDF1EA'; e.currentTarget.style.borderColor = '#658051'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#F7F7F5'; e.currentTarget.style.borderColor = '#E8ECE4'; }}>
-            🧾
+            🖨️
           </button>
         </div>
       </div>
@@ -933,24 +933,27 @@ function InvoiceModal({ order, onClose }) {
   <meta charset="utf-8">
   <title>Invoice #${order.id} — Carra Coffee</title>
   <style>
+    @page {
+      size: 58mm auto;
+      margin: 2mm 0;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Courier New', monospace;
-      font-size: 12px;
+      font-size: 11px;
       color: #000;
       background: #fff;
-      padding: 16px;
-      max-width: 320px;
-      margin: 0 auto;
+      width: 54mm;
+      padding: 2mm 2mm;
     }
     .center { text-align: center; }
     .bold { font-weight: bold; }
-    .divider { border-top: 1px dashed #999; margin: 8px 0; }
+    .divider { border-top: 1px dashed #999; margin: 4px 0; }
     table { width: 100%; border-collapse: collapse; }
-    .total-row td { font-weight: bold; font-size: 14px; padding-top: 6px; }
-    .footer { text-align: center; margin-top: 8px; font-size: 11px; color: #555; }
+    td { font-size: 11px; vertical-align: top; }
+    .total-row td { font-weight: bold; font-size: 13px; padding-top: 4px; }
+    .footer { text-align: center; margin-top: 6px; font-size: 10px; color: #555; }
     @media print {
-      body { padding: 0; }
       .no-print { display: none; }
     }
   </style>
@@ -999,11 +1002,18 @@ function InvoiceModal({ order, onClose }) {
 </body>
 </html>`;
 
-    const popup = window.open('', '_blank', 'width=420,height=600,scrollbars=yes');
-    if (popup) {
-      popup.document.write(html);
-      popup.document.close();
-    }
+    // Pakai iframe invisible — tidak butuh popup permission, works di PWA
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    };
   };
 
   return (
