@@ -26,7 +26,7 @@ function NotifToggle() {
     setIsPWA(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
   }, []);
 
-  const notSupported = !('Notification' in window) || (isIOS && !isPWA);
+  const notSupported = typeof window === 'undefined' || !('Notification' in window) || (isIOS && !isPWA);
 
   const handleToggle = async () => {
     if (notSupported) return; // button disabled
