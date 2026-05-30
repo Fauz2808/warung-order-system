@@ -343,4 +343,103 @@ router.put('/bulk-status', async (req, res) => {
   }
 });
 
+// PUT /api/orders/:id/items — edit item order (kasir)
+// Ganti semua items, rekonsiliasi stok, recalculate total
+router.put('/:id/items', authMiddleware, async (req, res) => {
+  try {
+    const orderId = parseInt(req.params.id);
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Items tidak boleh kosong' });
+    }
+
+    // Ambil order lama beserta item-item nya
+    const existing = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!existing) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+
+    // Ambil harga menu baru
+    const menuIds = [...new Set(items.filter(i => i.menuId).map(i => i.menuId))];
+    const menus   = await prisma.menu.findMany({ where: { id: { in: menuIds } } });
+    const menuMap = Object.fromEntries(menus.map(m => [m.id, m]));
+
+    // Cek semua menu tersedia
+    for (const item of items.filter(i => i.menuId)) {
+      if (!menuMap[item.menuId]) {
+        return res.status(400).json({ success: false, message: `Menu ID ${item.menuId} tidak ditemukan` });
+      }
+    }
+
+    // Rekonsiliasi stok: hitung delta qty per menuId
+    const oldQty = {};
+    for (const oi of existing.items) {
+      if (oi.menuId) oldQty[oi.menuId] = (oldQty[oi.menuId] || 0) + oi.quantity;
+    }
+    const newQty = {};
+    for (const ni of items.filter(i => i.menuId)) {
+      newQty[ni.menuId] = (newQty[ni.menuId] || 0) + ni.quantity;
+    }
+
+    // Hitung total baru
+    const totalAmount = items.reduce((sum, item) => {
+      if (!item.menuId) return sum + (item.price || 0) * item.quantity;
+      const base = menuMap[item.menuId].price;
+      const espresso = (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0);
+      return sum + (base + espresso) * item.quantity;
+    }, 0);
+
+    // Transaction: hapus items lama, buat items baru, update total, rekonsiliasi stok
+    const allMenuIds = new Set([...Object.keys(oldQty), ...Object.keys(newQty)].map(Number));
+    const stockUpdates = [];
+    for (const mid of allMenuIds) {
+      const menu = menuMap[mid];
+      if (!menu || menu.stock === null) continue;
+      const delta = (newQty[mid] || 0) - (oldQty[mid] || 0);
+      if (delta === 0) continue;
+      const newStock = Math.max(0, menu.stock - delta);
+      stockUpdates.push(prisma.menu.update({
+        where: { id: mid },
+        data: { stock: newStock, ...(newStock === 0 ? { isAvailable: false } : {}) },
+      }));
+    }
+
+    await prisma.$transaction([
+      prisma.orderItem.deleteMany({ where: { orderId } }),
+      prisma.order.update({
+        where: { id: orderId },
+        data: {
+          totalAmount,
+          items: {
+            create: items.map(item => ({
+              menuId:                  item.menuId || null,
+              menuName:                item.menuId ? menuMap[item.menuId].name : (item.menuName || '-'),
+              quantity:                item.quantity,
+              price:                   item.menuId ? menuMap[item.menuId].price : (item.price || 0),
+              notes:                   item.notes || null,
+              additionalEspressoShots: item.additionalEspressoShots || 0,
+              additionalEspressoPrice: item.additionalEspressoPrice || 0,
+            })),
+          },
+        },
+      }),
+      ...stockUpdates,
+    ]);
+
+    const updated = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { table: true, items: { include: { menu: true } } },
+    });
+
+    if (req.io) req.io.emit('order:status_update', { orderId });
+
+    res.json({ success: true, data: updated, message: 'Order berhasil diubah' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Gagal mengubah order' });
+  }
+});
+
 module.exports = router;

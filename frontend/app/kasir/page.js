@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu } from '@/lib/api';
+import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
@@ -87,6 +87,7 @@ export default function KasirPage() {
   const [dismissedLowStock, setDismissedLowStock] = useState(false);
   const [payModalOrder, setPayModalOrder] = useState(null);
   const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [editOrder, setEditOrder] = useState(null);
   const [printerName, setPrinterName] = useState(null);
   const [printerConnecting, setPrinterConnecting] = useState(false);
   const queryClient = useQueryClient();
@@ -577,6 +578,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
               onOpenPayModal={(order) => setPayModalOrder(order)}
               onOpenInvoice={(order) => setInvoiceOrder(order)}
               onDirectPrint={handlePrintOrder}
+              onEditOrder={(order) => setEditOrder(order)}
             />
           ))
         )}
@@ -622,6 +624,13 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     {invoiceOrder && (
       <InvoiceModal order={invoiceOrder} onClose={() => setInvoiceOrder(null)} />
     )}
+    {editOrder && (
+      <EditOrderModal
+        order={editOrder}
+        onClose={() => setEditOrder(null)}
+        onSaved={() => { setEditOrder(null); queryClient.invalidateQueries({ queryKey: ['orders'] }); }}
+      />
+    )}
     </StaffLayout>
   );
 }
@@ -630,7 +639,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
 const getWaitMinutes = (dateStr) => Math.floor((Date.now() - new Date(dateStr)) / 60000);
 
 // ─── Komponen OrderCard ───────────────────────────────
-function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect, onOpenPayModal, onOpenInvoice, onDirectPrint }) {
+function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSelect, onOpenPayModal, onOpenInvoice, onDirectPrint, onEditOrder }) {
   const [expanded, setExpanded] = useState(true);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -795,6 +804,18 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
               title={cfg.nextLabel}
             >
               {nextStatus === 'done' ? '✓' : '▶'} {cfg.nextLabel}
+            </button>
+          )}
+          {/* Tombol edit order */}
+          {order.status !== 'done' && order.status !== 'cancelled' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl border text-sm transition shrink-0"
+              style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
+              title="Edit pesanan"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#FEF3C7'; e.currentTarget.style.borderColor = '#FCD34D'; e.currentTarget.style.color = '#92400E'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#F7F7F5'; e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.color = '#6B7560'; }}>
+              ✏️
             </button>
           )}
           {/* Tombol print langsung ke thermal printer */}
@@ -1288,6 +1309,317 @@ function LoadingAuth() {
       <div className="text-center" style={{ color: '#9CA38F' }}>
         <div className="text-4xl mb-3 animate-pulse">🔐</div>
         <p>Memeriksa sesi login...</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── EditOrderModal ───────────────────────────────────
+function EditOrderModal({ order, onClose, onSaved }) {
+  const queryClient = useQueryClient();
+  const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+  // Cart: clone items dari order yang ada
+  const [cart, setCart] = useState(() =>
+    (order.items || []).map((item) => ({
+      menuId:                  item.menuId,
+      menuName:                item.menuName || item.menu?.name || '-',
+      price:                   item.price,
+      quantity:                item.quantity,
+      notes:                   item.notes || '',
+      additionalEspressoShots: item.additionalEspressoShots || 0,
+      additionalEspressoPrice: item.additionalEspressoPrice || 0,
+    }))
+  );
+
+  const [search, setSearch]           = useState('');
+  const [activeCategory, setCategory] = useState('semua');
+  const [addModal, setAddModal]       = useState(null); // item yang mau ditambah
+
+  const { data: menu = [] }       = useQuery({ queryKey: ['menu'],       queryFn: getMenu });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: getCategories });
+
+  const editMutation = useMutation({
+    mutationFn: (items) => editOrderItems(order.id, items),
+    onSuccess: () => { toast.success('Order berhasil diubah!'); onSaved(); },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal mengubah order'),
+  });
+
+  const totalAmount = cart.reduce((sum, i) => {
+    const esp = (i.additionalEspressoShots || 0) * (i.additionalEspressoPrice || 0);
+    return sum + (i.price + esp) * i.quantity;
+  }, 0);
+
+  const activeSlugs       = new Set(menu.map((m) => m.category));
+  const filteredCategories = categories.filter((c) => activeSlugs.has(c.slug));
+  const filteredMenu       = menu.filter((m) => {
+    const catOk    = activeCategory === 'semua' || m.category === activeCategory;
+    const searchOk = !search || m.name.toLowerCase().includes(search.toLowerCase());
+    return catOk && searchOk && m.isAvailable;
+  });
+
+  const getCatEmoji = (slug) => categories.find((c) => c.slug === slug)?.emoji ?? '☕';
+
+  const removeItem = (idx) => setCart((c) => c.filter((_, i) => i !== idx));
+  const changeQty  = (idx, delta) => setCart((c) =>
+    c.map((item, i) => i === idx ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item)
+  );
+
+  const handleAddItem = (item, { temperature, additionalEspressoShots, additionalEspressoPrice, notes }) => {
+    setCart((c) => [...c, {
+      menuId:                  item.id,
+      menuName:                item.name,
+      price:                   item.price,
+      quantity:                1,
+      notes:                   [temperature ? (temperature === 'hot' ? '🔥 Hot' : '🧊 Ice') : null, notes || null].filter(Boolean).join(' · '),
+      additionalEspressoShots: additionalEspressoShots || 0,
+      additionalEspressoPrice: additionalEspressoPrice || item.additionalEspressoPrice || 0,
+    }]);
+    setAddModal(null);
+    toast.success(`${item.name} ditambahkan`);
+  };
+
+  const handleSave = () => {
+    if (cart.length === 0) { toast.error('Minimal 1 item'); return; }
+    editMutation.mutate(cart);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl shadow-2xl flex flex-col"
+        style={{ maxHeight: '92vh' }}>
+        {/* Handle mobile */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+
+        {/* Header */}
+        <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: '#E8ECE4' }}>
+          <div>
+            <h2 className="font-bold text-lg" style={{ color: '#1C1C1A' }}>✏️ Edit Order #{order.id}</h2>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>Meja {order.table?.number} · Lantai {order.table?.floor}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
+            style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+
+          {/* LEFT: Tambah menu */}
+          <div className="flex flex-col sm:w-1/2 border-b sm:border-b-0 sm:border-r" style={{ borderColor: '#E8ECE4', maxHeight: '40vh', minHeight: '40vh' }}>
+            <div className="px-4 py-3 space-y-2 shrink-0 border-b" style={{ borderColor: '#E8ECE4' }}>
+              <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Tambah Item</p>
+              <input type="text" placeholder="Cari menu..." value={search} onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl text-sm outline-none border"
+                style={{ border: '1px solid #E8ECE4', background: '#FAFAF8' }} />
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+                <button onClick={() => setCategory('semua')}
+                  className="px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap shrink-0"
+                  style={activeCategory === 'semua' ? { background: '#658051', color: '#fff' } : { background: '#F7F7F5', color: '#6B7560' }}>
+                  Semua
+                </button>
+                {filteredCategories.map((cat) => (
+                  <button key={cat.slug} onClick={() => setCategory(cat.slug)}
+                    className="px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap shrink-0"
+                    style={activeCategory === cat.slug ? { background: '#658051', color: '#fff' } : { background: '#F7F7F5', color: '#6B7560' }}>
+                    {cat.emoji} {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {filteredMenu.map((item) => (
+                <button key={item.id} onClick={() => {
+                    if (item.hasTemperatureOption || item.hasAdditionalEspresso) {
+                      setAddModal(item);
+                    } else {
+                      handleAddItem(item, {});
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left border-b transition"
+                  style={{ borderColor: '#F3F4F6' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#F7F7F5'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                  <span className="text-lg shrink-0">{getCatEmoji(item.category)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.name}</p>
+                    <p className="text-xs" style={{ color: '#658051' }}>{fmt(item.price)}</p>
+                  </div>
+                  <span className="text-xs font-bold shrink-0" style={{ color: '#658051' }}>+ Tambah</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT: Cart items */}
+          <div className="flex flex-col sm:w-1/2 min-h-0">
+            <div className="px-4 py-3 shrink-0 border-b" style={{ borderColor: '#E8ECE4' }}>
+              <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Item Saat Ini ({cart.length})</p>
+            </div>
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {cart.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: '#9CA38F' }}>Tidak ada item</p>
+              ) : cart.map((item, idx) => (
+                <div key={idx} className="flex items-start gap-3 p-3 rounded-xl border" style={{ background: '#FAFAF8', borderColor: '#E8ECE4' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.menuName}</p>
+                    <p className="text-xs" style={{ color: '#658051' }}>{fmt(item.price)}/pcs</p>
+                    {item.notes && (
+                      <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                        {item.notes}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => changeQty(idx, -1)}
+                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center"
+                      style={{ background: '#FEE2E2', color: '#DC2626' }}>−</button>
+                    <span className="text-sm font-bold w-5 text-center" style={{ color: '#1C1C1A' }}>{item.quantity}</span>
+                    <button onClick={() => changeQty(idx, 1)}
+                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white"
+                      style={{ background: '#658051' }}>+</button>
+                    <button onClick={() => removeItem(idx)}
+                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center ml-1"
+                      style={{ background: '#FEE2E2', color: '#DC2626' }} title="Hapus item">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-4 border-t space-y-2 shrink-0" style={{ borderColor: '#E8ECE4' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold" style={{ color: '#6B7560' }}>Total Baru</span>
+                <span className="text-lg font-bold" style={{ color: '#658051' }}>{fmt(totalAmount)}</span>
+              </div>
+              <button onClick={handleSave} disabled={editMutation.isPending || cart.length === 0}
+                className="w-full py-3 rounded-xl font-bold text-sm text-white transition disabled:opacity-50"
+                style={{ background: '#658051' }}
+                onMouseEnter={(e) => { if (!editMutation.isPending) e.currentTarget.style.background = '#4d6340'; }}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}>
+                {editMutation.isPending ? '⏳ Menyimpan...' : '✅ Simpan Perubahan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mini AddItemModal untuk item dengan opsi */}
+      {addModal && (
+        <EditAddItemModal
+          item={addModal}
+          onConfirm={(opts) => handleAddItem(addModal, opts)}
+          onClose={() => setAddModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Mini modal untuk item dengan opsi (suhu/espresso) ─
+function EditAddItemModal({ item, onConfirm, onClose }) {
+  const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+  const [temp, setTemp]           = useState(item.hasTemperatureOption ? null : 'none');
+  const [chips, setChips]         = useState([]);
+  const [espresso, setEspresso]   = useState(0);
+  const [customNote, setCustomNote] = useState('');
+
+  const ICE_CHIPS = ['Less ice', 'No ice'];
+  const isHot = temp === 'Hot';
+  const canConfirm = !item.hasTemperatureOption || temp !== null;
+
+  const toggleChip = (chip) => {
+    if (isHot && ICE_CHIPS.includes(chip)) return;
+    setChips((p) => p.includes(chip) ? p.filter((c) => c !== chip) : [...p, chip]);
+  };
+  const handleTempSelect = (t) => {
+    setTemp(t);
+    if (t === 'Hot') setChips((p) => p.filter((c) => !ICE_CHIPS.includes(c)));
+  };
+
+  const notes = [chips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
+  const quickNotes = ['Less sugar', 'Less ice', 'No ice', 'Extra sweet', 'No sugar'];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full bg-white rounded-t-3xl shadow-2xl max-h-[80vh] flex flex-col">
+        <div className="flex justify-center pt-3 pb-1"><div className="w-10 h-1 rounded-full bg-gray-200" /></div>
+        <div className="overflow-y-auto px-5 pb-2 pt-2 flex-1">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-base" style={{ color: '#1C1C1A' }}>{item.name}</h3>
+              <p className="text-sm font-semibold" style={{ color: '#658051' }}>{fmt(item.price)}</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
+              style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+          </div>
+
+          {item.hasTemperatureOption && (
+            <div className="mb-4">
+              <p className="text-sm font-semibold mb-2" style={{ color: '#1C1C1A' }}>Pilih Suhu <span style={{ color: '#E84040' }}>*</span></p>
+              <div className="grid grid-cols-2 gap-2">
+                {[{ v: 'Ice', e: '🧊', ac: '#2563EB', ab: '#EFF6FF', ab2: '#93C5FD' }, { v: 'Hot', e: '♨️', ac: '#DC2626', ab: '#FEF2F2', ab2: '#FCA5A5' }].map((opt) => (
+                  <button key={opt.v} onClick={() => handleTempSelect(opt.v)}
+                    className="flex flex-col items-center gap-1 py-3 rounded-2xl border-2 transition"
+                    style={{ borderColor: temp === opt.v ? opt.ab2 : '#E8ECE4', background: temp === opt.v ? opt.ab : '#FAFAF8', color: temp === opt.v ? opt.ac : '#6B7560' }}>
+                    <span className="text-2xl">{opt.e}</span>
+                    <span className="font-bold text-sm">{opt.v}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {item.hasAdditionalEspresso && (
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>Espresso Shot</p>
+                <p className="text-xs" style={{ color: '#9CA38F' }}>+{fmt(item.additionalEspressoPrice || 3000)}/shot</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEspresso((s) => Math.max(0, s - 1))} disabled={espresso === 0}
+                  className="w-8 h-8 rounded-xl border-2 font-bold flex items-center justify-center disabled:opacity-30"
+                  style={{ borderColor: '#E8ECE4', color: '#658051' }}>−</button>
+                <span className="w-6 text-center font-bold" style={{ color: '#1C1C1A' }}>{espresso}</span>
+                <button onClick={() => setEspresso((s) => Math.min(10, s + 1))}
+                  className="w-8 h-8 rounded-xl border-2 font-bold flex items-center justify-center"
+                  style={{ borderColor: '#658051', background: '#EDF1EA', color: '#658051' }}>+</button>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-2">
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1C1C1A' }}>Catatan</p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {quickNotes.map((chip) => {
+                const active = chips.includes(chip);
+                const disabled = isHot && ICE_CHIPS.includes(chip);
+                return (
+                  <button key={chip} onClick={() => toggleChip(chip)} disabled={disabled}
+                    className="px-3 py-1 rounded-full text-xs font-semibold border-2 transition"
+                    style={disabled ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', textDecoration: 'line-through' }
+                      : active ? { background: '#EDF1EA', color: '#658051', borderColor: '#658051' }
+                      : { background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}>
+                    {active ? `✓ ${chip}` : `+ ${chip}`}
+                  </button>
+                );
+              })}
+            </div>
+            <input type="text" value={customNote} onChange={(e) => setCustomNote(e.target.value)}
+              placeholder="Catatan lain..." className="w-full rounded-xl px-3 py-2 text-sm outline-none border"
+              style={{ border: '1.5px solid #E8ECE4' }} />
+          </div>
+        </div>
+        <div className="px-5 pb-6 pt-3 border-t" style={{ borderColor: '#F0F0EC' }}>
+          <button onClick={() => onConfirm({ temperature: temp === 'none' ? '' : temp, additionalEspressoShots: espresso, additionalEspressoPrice: item.additionalEspressoPrice || 3000, notes })}
+            disabled={!canConfirm}
+            className="w-full py-3 rounded-2xl font-bold text-sm text-white disabled:opacity-40"
+            style={{ background: '#658051' }}>
+            {item.hasTemperatureOption && !temp ? 'Pilih suhu dulu' : 'Tambah ke Pesanan'}
+          </button>
+        </div>
       </div>
     </div>
   );
