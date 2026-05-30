@@ -189,6 +189,12 @@ export default function MejaPage() {
               Order #{orderSuccess.id}
               {orderSuccess.customerName ? ` · ${orderSuccess.customerName}` : ''}
             </p>
+            {!(isDone || isReady) && orderSuccess.estimatedMinutes && (
+              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold"
+                style={{ background: '#FFF8EC', color: '#92660A', border: '1px solid #FDE68A' }}>
+                ⏱️ Estimasi siap ~{orderSuccess.estimatedMinutes} menit
+              </div>
+            )}
           </div>
 
           {/* Status steps */}

@@ -210,14 +210,20 @@ router.post('/', async (req, res) => {
     });
 
     // Kirim event real-time ke kasir via Socket.IO
-    // req.io diinjeksi dari index.js
     if (req.io) {
       req.io.emit('order:new', order);
     }
 
+    // Hitung estimasi waktu tunggu berdasarkan antrian aktif
+    const activeCount = await prisma.order.count({
+      where: { status: { in: ['pending', 'preparing'] } },
+    });
+    // 5 menit per order di antrian, minimum 5 menit, maksimum 30 menit
+    const estimatedMinutes = Math.min(30, Math.max(5, activeCount * 5));
+
     res.status(201).json({
       success: true,
-      data: order,
+      data: { ...order, estimatedMinutes },
       message: 'Pesanan berhasil dikirim!',
     });
   } catch (error) {
