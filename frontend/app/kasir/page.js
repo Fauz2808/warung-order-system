@@ -10,7 +10,7 @@ import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu 
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
-import { isPrinterConnected, isPrintingNow, connectPrinter, disconnectPrinter, printReceipt } from '@/lib/thermalPrinter';
+import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, tryAutoReconnect } from '@/lib/thermalPrinter';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -182,6 +182,13 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       Notification.requestPermission().then((p) => setNotifPermission(p));
     }
   }, []);
+
+  // Auto-reconnect ke printer yang pernah di-pair — silent, tanpa dialog
+  useEffect(() => {
+    tryAutoReconnect().then((connected) => {
+      if (connected) setPrinterName(getConnectedName() || 'Printer');
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Semua hooks harus dipanggil sebelum early return
   const { data: orders = [], isLoading } = useQuery({

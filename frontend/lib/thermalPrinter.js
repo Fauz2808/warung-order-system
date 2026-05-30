@@ -86,6 +86,10 @@ export function isPrintingNow() {
   return _printing;
 }
 
+export function getConnectedName() {
+  return _device?.name ?? null;
+}
+
 export async function connectPrinter() {
   if (!isBTSupported()) throw new Error('Web Bluetooth tidak didukung. Gunakan Chrome/Edge.');
 
@@ -123,6 +127,36 @@ export function disconnectPrinter() {
   if (_device?.gatt?.connected) _device.gatt.disconnect();
   _char = null;
   _device = null;
+}
+
+// Auto-reconnect ke printer yang pernah di-pair sebelumnya (tanpa dialog picker)
+export async function tryAutoReconnect() {
+  if (!isBTSupported()) return false;
+  if (isPrinterConnected()) return true;
+  try {
+    const remembered = await navigator.bluetooth.getDevices();
+    if (!remembered.length) return false;
+
+    // Ambil printer pertama yang dikenal (biasanya hanya 1)
+    const device = remembered[0];
+    const server = await device.gatt.connect();
+
+    for (const p of PROFILES) {
+      try {
+        const svc = await server.getPrimaryService(p.service);
+        const ch  = await svc.getCharacteristic(p.char);
+        _char   = ch;
+        _device = device;
+        device.addEventListener('gattserverdisconnected', () => {
+          _char = null; _device = null;
+        });
+        return true;
+      } catch { /* try next profile */ }
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 const fmt = (n) =>
