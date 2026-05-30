@@ -10,7 +10,7 @@ import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu 
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
-import { isPrinterConnected, connectPrinter, disconnectPrinter, printReceipt } from '@/lib/thermalPrinter';
+import { isPrinterConnected, isPrintingNow, connectPrinter, disconnectPrinter, printReceipt } from '@/lib/thermalPrinter';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -106,6 +106,8 @@ export default function KasirPage() {
   };
 
   const handlePrintOrder = async (order) => {
+    if (isPrintingNow()) { toast('Sedang mencetak...'); return; }
+
     // Kalau BT support tapi belum connect — auto-connect dulu, lalu print
     if (!isPrinterConnected() && typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
       setPrinterConnecting(true);
@@ -122,11 +124,12 @@ export default function KasirPage() {
     }
 
     if (isPrinterConnected()) {
+      const tid = toast.loading('🖨️ Mencetak struk...');
       try {
         await printReceipt(order);
-        toast.success('🖨️ Struk dicetak!');
+        toast.success('🖨️ Struk dicetak!', { id: tid });
       } catch (err) {
-        toast.error(err.message || 'Gagal cetak');
+        toast.error(err.message || 'Gagal cetak', { id: tid });
       }
     } else {
       // Fallback ke iframe print

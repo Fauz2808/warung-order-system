@@ -1,23 +1,31 @@
 'use client';
 
 // Known BLE service/characteristic pairs for common 58mm thermal printers
-// RPP02N typically uses the first profile
 const PROFILES = [
   { service: '000018f0-0000-1000-8000-00805f9b34fb', char: '00002af1-0000-1000-8000-00805f9b34fb' },
   { service: 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', char: 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f' },
   { service: '49535343-fe7d-4ae5-8fa9-9fafd205e455', char: '49535343-8841-43f4-a8d4-ecbe34729bb3' },
 ];
 
-let _char = null;
+let _char   = null;
 let _device = null;
+let _printing = false; // lock: prevent double-print
 
 // ── ESC/POS primitives ─────────────────────────────────
 const ESC = 0x1b;
 const GS  = 0x1d;
 const LF  = 0x0a;
 
-const b = (...v) => new Uint8Array(v.flat());
-const txt = (s) => new TextEncoder().encode(s);
+const b   = (...v) => new Uint8Array(v.flat());
+const txt = (s) => {
+  // Encode to ASCII, replace non-ASCII with '?'
+  const out = [];
+  for (const ch of s) {
+    const code = ch.charCodeAt(0);
+    out.push(code < 128 ? code : 0x3f);
+  }
+  return new Uint8Array(out);
+};
 
 const cmd = {
   init:      () => b(ESC, 0x40),
@@ -30,13 +38,13 @@ const cmd = {
   normal:    () => b(ESC, 0x21, 0x00),
 };
 
-const W = 32; // chars per line at 58mm
+const W = 32; // chars per line at 58mm normal font
 
-function divider() { return txt('-'.repeat(W) + '\n'); }
+const divider = () => txt('--------------------------------\n');
 
 function row(l, r) {
-  const gap = W - l.length - r.length;
-  return txt(l + ' '.repeat(Math.max(1, gap)) + r + '\n');
+  const gap = Math.max(1, W - l.length - r.length);
+  return txt(l + ' '.repeat(gap) + r + '\n');
 }
 
 function concat(...arrays) {
@@ -47,11 +55,15 @@ function concat(...arrays) {
   return out;
 }
 
+// Small chunks + generous delay — most BLE thermal printers need this
 async function writeChunked(data) {
-  const CHUNK = 512;
+  const CHUNK = 100;
+  const DELAY = 50; // ms between chunks
   for (let i = 0; i < data.length; i += CHUNK) {
     await _char.writeValueWithoutResponse(data.slice(i, i + CHUNK));
-    if (i + CHUNK < data.length) await new Promise(r => setTimeout(r, 20));
+    if (i + CHUNK < data.length) {
+      await new Promise(r => setTimeout(r, DELAY));
+    }
   }
 }
 
@@ -65,8 +77,8 @@ export function isPrinterConnected() {
   return !!_char && !!_device?.gatt?.connected;
 }
 
-export function getPrinterName() {
-  return _device?.name ?? null;
+export function isPrintingNow() {
+  return _printing;
 }
 
 export async function connectPrinter() {
@@ -74,7 +86,6 @@ export async function connectPrinter() {
 
   const serviceUUIDs = PROFILES.map(p => p.service);
 
-  // Try filter by name first, fall back to acceptAllDevices
   const device = await navigator.bluetooth.requestDevice({
     filters: [{ name: 'RPP02N' }],
     optionalServices: serviceUUIDs,
@@ -109,65 +120,90 @@ export function disconnectPrinter() {
   _device = null;
 }
 
+const fmt = (n) =>
+  'Rp ' + Number(n || 0).toLocaleString('id-ID');
+
+const fmtDate = (s) => {
+  const d = new Date(s);
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}.${String(d.getMinutes()).padStart(2,'0')}`;
+};
+
 export async function printReceipt(order) {
   if (!isPrinterConnected()) throw new Error('Printer belum terhubung');
+  if (_printing) throw new Error('Sedang mencetak, tunggu sebentar');
 
-  const fmt = (n) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+  _printing = true;
+  try {
+    const parts = [
+      cmd.init(),
+      cmd.lf(),
+      // Header — centered bold double-height
+      cmd.center(), cmd.bold(true), cmd.dblHeight(),
+      txt('CARRA COFFEE\n'),
+      cmd.normal(), cmd.bold(false),
+      cmd.lf(),
+      cmd.left(),
+      divider(),
+      // Order info
+      row('No. Order:', `#${order.id}`),
+      row('Tanggal:', fmtDate(order.createdAt)),
+      row('Meja:', `${order.table?.number ?? '-'} Lt.${order.table?.floor ?? '-'}`),
+      ...(order.customerName ? [row('Customer:', order.customerName.slice(0, 18))] : []),
+      row('Tipe:', order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'),
+      row('Status:', order.isPaid ? 'LUNAS' : 'BELUM BAYAR'),
+      divider(),
+    ];
 
-  const fmtDate = (s) =>
-    new Date(s).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-  const parts = [
-    cmd.init(),
-    cmd.lf(),
-    cmd.center(), cmd.bold(true), cmd.dblHeight(),
-    txt('CARRA COFFEE\n'),
-    cmd.normal(), cmd.bold(false),
-    cmd.lf(),
-    cmd.left(),
-    divider(),
-    row('Invoice', `#${order.id}`),
-    row('Tanggal', fmtDate(order.createdAt).slice(0, W - 9)),
-    row('Meja', `${order.table?.number ?? '-'} Lt.${order.table?.floor ?? '-'}`),
-    ...(order.customerName ? [row('Customer', order.customerName.slice(0, W - 10))] : []),
-    row('Tipe', order.orderType === 'dine-in' ? 'Dine In' : 'Take Away'),
-    row('Status', order.isPaid ? 'LUNAS' : 'BELUM BAYAR'),
-    divider(),
-  ];
-
-  for (const item of (order.items || [])) {
-    const name  = (item.menuName || item.menu?.name || '-').slice(0, W - 12);
-    const price = fmt(item.price * item.quantity);
-    const label = `${item.quantity}x ${name}`;
-    if (label.length + price.length <= W) {
-      parts.push(row(label, price));
+    // Items
+    const items = order.items || [];
+    if (items.length === 0) {
+      parts.push(txt('(tidak ada item)\n'));
     } else {
-      parts.push(txt(label.slice(0, W) + '\n'));
-      parts.push(row('', price));
+      for (const item of items) {
+        const espressoExtra = (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0);
+        const unitPrice     = (item.price || 0) + espressoExtra;
+        const totalPrice    = unitPrice * item.quantity;
+        const name          = (item.menuName || item.menu?.name || '-').slice(0, 20);
+        const label         = `${item.quantity}x ${name}`;
+        const price         = fmt(totalPrice);
+
+        if (label.length + price.length + 1 <= W) {
+          parts.push(row(label, price));
+        } else {
+          parts.push(txt((label + '\n').slice(0, W + 1)));
+          parts.push(row('', price));
+        }
+        if (item.additionalEspressoShots > 0) {
+          parts.push(txt(`   +${item.additionalEspressoShots} Espresso Shot\n`));
+        }
+        if (item.notes) {
+          parts.push(txt(`   ${item.notes.slice(0, W - 3)}\n`));
+        }
+      }
     }
-    if (item.notes) {
-      parts.push(txt(`   ${item.notes.slice(0, W - 3)}\n`));
+
+    if (order.notes) {
+      parts.push(cmd.lf());
+      parts.push(txt(`Catatan:\n${order.notes.slice(0, W)}\n`));
     }
+
+    parts.push(
+      divider(),
+      cmd.bold(true),
+      row('TOTAL:', fmt(order.totalAmount || 0)),
+      cmd.bold(false),
+      divider(),
+      cmd.lf(),
+      cmd.center(),
+      txt('Terima kasih sudah berkunjung!\n'),
+      txt('--- Carra Coffee ---\n'),
+      cmd.lf(), cmd.lf(), cmd.lf(),
+      cmd.cut(),
+    );
+
+    await writeChunked(concat(...parts));
+  } finally {
+    _printing = false;
   }
-
-  if (order.notes) {
-    parts.push(cmd.lf(), txt(`Catatan: ${order.notes.slice(0, W - 9)}\n`));
-  }
-
-  parts.push(
-    divider(),
-    cmd.bold(true),
-    row('TOTAL', fmt(order.totalAmount)),
-    cmd.bold(false),
-    divider(),
-    cmd.lf(),
-    cmd.center(),
-    txt('Terima kasih telah berkunjung!\n'),
-    txt('-- Carra Coffee --\n'),
-    cmd.lf(), cmd.lf(), cmd.lf(),
-    cmd.cut(),
-  );
-
-  await writeChunked(concat(...parts));
 }
