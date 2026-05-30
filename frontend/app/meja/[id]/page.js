@@ -8,6 +8,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getTable, getMenu, createOrder, getSettings, getOrderById } from '@/lib/api';
 import useCartStore from '@/store/cartStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { getSocket } from '@/lib/socket';
 
 // ─── Design tokens ────────────────────────────────────
 // Primary: #658051 (earthy olive green)
@@ -29,6 +31,20 @@ export default function MejaPage() {
   const [customerName, setCustomerName] = useState('');
 
   const { items, addItem, removeItem, updateTemperature, getTotal, getTotalItems, clearCart, setTable } = useCartStore();
+  const queryClient = useQueryClient();
+
+  // Listen socket — warung buka/tutup otomatis, langsung refetch settings
+  useEffect(() => {
+    const socket = getSocket();
+    socket.connect();
+    socket.on('warung:status_changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    });
+    return () => {
+      socket.off('warung:status_changed');
+      socket.disconnect();
+    };
+  }, [queryClient]);
 
   const { data: table, isLoading: loadingTable, error: tableError } = useQuery({
     queryKey: ['table', tableId],

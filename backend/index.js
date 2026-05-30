@@ -77,6 +77,34 @@ io.on('connection', (socket) => {
   });
 });
 
+// ─── Auto open/close cron — cek setiap menit ───────────────────
+const prisma = require('./src/prisma');
+
+let lastOpenState = null;
+
+function checkIsOpenNow(openTime, closeTime, isForceClose) {
+  if (isForceClose) return false;
+  const now = new Date();
+  const wibMin = ((now.getUTCHours() * 60 + now.getUTCMinutes()) + 7 * 60) % (24 * 60);
+  const [oh, om] = openTime.split(':').map(Number);
+  const [ch, cm] = closeTime.split(':').map(Number);
+  const oMin = oh * 60 + om, cMin = ch * 60 + cm;
+  return oMin <= cMin ? wibMin >= oMin && wibMin < cMin : wibMin >= oMin || wibMin < cMin;
+}
+
+setInterval(async () => {
+  try {
+    const s = await prisma.settings.findUnique({ where: { id: 1 } });
+    if (!s) return;
+    const isOpen = checkIsOpenNow(s.openTime, s.closeTime, s.isForceClose);
+    if (lastOpenState !== null && lastOpenState !== isOpen) {
+      io.emit('warung:status_changed', { isOpen });
+      console.log(`🕐 Warung otomatis ${isOpen ? 'BUKA' : 'TUTUP'}`);
+    }
+    lastOpenState = isOpen;
+  } catch (_) {}
+}, 60000);
+
 // ─── Start Server ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
