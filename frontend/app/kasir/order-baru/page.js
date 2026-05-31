@@ -152,22 +152,22 @@ export default function OrderBaruPage() {
   const isLowStock    = (item) => item.stock !== null && item.stock > 0 && item.stock <= 5;
   const hasStockLimit = (item) => item.stock !== null;
 
+  // ── Validasi item keranjang vs menu data saat ini ─
+  const getCartItemStatus = (cartItem) => {
+    const menuItem = menu.find((m) => m.id === cartItem.menuId);
+    if (!menuItem) return { valid: false, reason: 'Menu tidak ditemukan' };
+    if (!menuItem.isAvailable) return { valid: false, reason: 'Menu tidak tersedia' };
+    if (menuItem.stock !== null && menuItem.stock <= 0) return { valid: false, reason: 'Stok habis' };
+    if (menuItem.stock !== null && menuItem.stock < cartItem.quantity)
+      return { valid: false, reason: `Stok tidak cukup (sisa ${menuItem.stock})` };
+    return { valid: true, reason: null };
+  };
+  const hasInvalidCartItems = cart.some((i) => !getCartItemStatus(i).valid);
+
   // ── Validasi sebelum ke payment ───────────────────
   const handleSubmit = () => {
     if (cart.length === 0) { toast.error('Keranjang kosong!'); return; }
-
-    const invalidItems = cart.filter((cartItem) => {
-      const menuItem = menu.find((m) => m.id === cartItem.menuId);
-      return !menuItem || !menuItem.isAvailable || isOutOfStock(menuItem);
-    });
-    if (invalidItems.length > 0) {
-      setCart((prev) => prev.filter((cartItem) => {
-        const menuItem = menu.find((m) => m.id === cartItem.menuId);
-        return menuItem && menuItem.isAvailable && !isOutOfStock(menuItem);
-      }));
-      toast.error(`${invalidItems.map((i) => i.name).join(', ')} sudah habis dan dihapus dari keranjang`);
-      return;
-    }
+    if (hasInvalidCartItems) return; // tombol sudah disabled, tapi guard tetap
 
     if (!payNow) {
       const tableId = orderType === 'take-away' || !selectedTable ? (tables[0]?.id || 1) : parseInt(selectedTable);
@@ -260,12 +260,29 @@ export default function OrderBaruPage() {
         ) : (
           cart.map((item, cartIdx) => {
             const summaryBadge = getItemSummaryBadge(item);
+            const status = getCartItemStatus(item);
+            const isInvalid = !status.valid;
             return (
-              <div key={cartIdx} className="rounded-xl p-3 border" style={{ background: '#FAFAF8', borderColor: '#E8ECE4' }}>
+              <div key={cartIdx} className="rounded-xl p-3 border" style={{
+                background: isInvalid ? '#FEF2F2' : '#FAFAF8',
+                borderColor: isInvalid ? '#FCA5A5' : '#E8ECE4',
+              }}>
+                {/* Invalid warning banner */}
+                {isInvalid && (
+                  <div className="flex items-center justify-between mb-2 px-2 py-1 rounded-lg" style={{ background: '#FEE2E2' }}>
+                    <span className="text-xs font-semibold" style={{ color: '#DC2626' }}>
+                      ⚠️ {item.name}: {status.reason}
+                    </span>
+                    <button onClick={() => removeFromCart(cartIdx)}
+                      className="text-xs font-bold ml-2 shrink-0 underline" style={{ color: '#DC2626' }}>
+                      Hapus
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.name}</p>
-                    <p className="text-xs" style={{ color: '#658051' }}>
+                    <p className="text-sm font-semibold truncate" style={{ color: isInvalid ? '#DC2626' : '#1C1C1A' }}>{item.name}</p>
+                    <p className="text-xs" style={{ color: isInvalid ? '#FCA5A5' : '#658051' }}>
                       {formatRupiah((item.price + (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0)) * item.quantity)}
                     </p>
                     {/* Summary badge: temp + espresso + chips */}
@@ -283,7 +300,8 @@ export default function OrderBaruPage() {
                         const m = menu.find((x) => x.id === item.menuId);
                         if (m) handleIncrementItem(m);
                       }}
-                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white"
+                      disabled={isInvalid}
+                      className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white disabled:opacity-30"
                       style={{ background: '#658051' }}>+</button>
                   </div>
                 </div>
@@ -409,14 +427,20 @@ export default function OrderBaruPage() {
             <span className="text-lg font-bold" style={{ color: '#658051' }}>{formatRupiah(totalAmount)}</span>
           </div>
         )}
+        {hasInvalidCartItems && (
+          <p className="text-xs text-center font-medium mb-1" style={{ color: '#DC2626' }}>
+            ⚠️ Hapus menu yang tidak tersedia dulu
+          </p>
+        )}
         <button onClick={handleSubmit}
-          disabled={cart.length === 0 || orderMutation.isPending}
+          disabled={cart.length === 0 || orderMutation.isPending || hasInvalidCartItems}
           className="w-full py-3 rounded-xl font-bold text-sm text-white transition disabled:opacity-40"
-          style={{ background: payNow ? '#658051' : '#6B7560' }}
-          onMouseEnter={(e) => { if (cart.length > 0) e.currentTarget.style.background = payNow ? '#4d6340' : '#4b5563'; }}
-          onMouseLeave={(e) => e.currentTarget.style.background = payNow ? '#658051' : '#6B7560'}>
+          style={{ background: hasInvalidCartItems ? '#DC2626' : payNow ? '#658051' : '#6B7560' }}
+          onMouseEnter={(e) => { if (cart.length > 0 && !hasInvalidCartItems) e.currentTarget.style.background = payNow ? '#4d6340' : '#4b5563'; }}
+          onMouseLeave={(e) => e.currentTarget.style.background = hasInvalidCartItems ? '#DC2626' : payNow ? '#658051' : '#6B7560'}>
           {orderMutation.isPending
             ? 'Membuat order...'
+            : hasInvalidCartItems ? '⚠️ Ada menu tidak tersedia'
             : payNow ? '💳 Lanjut ke Pembayaran →' : '⏳ Catat Order (Bayar Nanti)'}
         </button>
         {cart.length > 0 && (
