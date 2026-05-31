@@ -111,6 +111,19 @@ setInterval(() => {
   require('http').get(`${url}/api/health`, () => {}).on('error', () => {});
 }, 5 * 60 * 1000);
 
+// ─── Backfill paymentMethod dari notes (sekali jalan) ──────────
+(async () => {
+  try {
+    const updated = await prisma.order.updateMany({
+      where: { paymentMethod: 'cash', notes: { contains: '[Bayar QRIS]' } },
+      data: { paymentMethod: 'qris' },
+    });
+    if (updated.count > 0) {
+      console.log(`✅ Backfill: ${updated.count} order diupdate ke paymentMethod=qris`);
+    }
+  } catch (_) {}
+})();
+
 // ─── Start Server ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
