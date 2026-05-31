@@ -588,7 +588,7 @@ function OrderHistoryModal({ orders, onClose }) {
                       <td className="py-2.5 pr-3 text-gray-500 text-xs max-w-[160px]">
                         <span className="line-clamp-2">{itemsSummary || '-'}</span>
                         {cancelNote && (
-                          <span className="block mt-0.5 text-red-400 italic">"{cancelNote}"</span>
+                          <span className="block mt-0.5 text-red-400 italic">&ldquo;{cancelNote}&rdquo;</span>
                         )}
                       </td>
                       <td className="py-2.5 pr-3 text-right font-semibold text-gray-700 whitespace-nowrap">{fmt(order.totalAmount)}</td>
