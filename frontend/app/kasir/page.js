@@ -167,13 +167,13 @@ export default function KasirPage() {
           <td style="padding:3px 0">${item.quantity}x ${item.menuName || item.menu?.name || '-'}${item.notes ? `<br><small style="color:#888">↳ ${item.notes}</small>` : ''}</td>
           <td style="text-align:right;padding:3px 0;white-space:nowrap">${fmt(item.price * item.quantity)}</td>
         </tr>`).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice #${order.id}</title>
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice #${order.dailyNumber || order.id}</title>
 <style>@page{size:58mm auto;margin:2mm 0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;color:#000;width:54mm;padding:2mm}.center{text-align:center}.bold{font-weight:bold}.divider{border-top:1px dashed #999;margin:4px 0}table{width:100%;border-collapse:collapse}td{font-size:11px;vertical-align:top}.total-row td{font-weight:bold;font-size:13px;padding-top:4px}.footer{text-align:center;margin-top:6px;font-size:10px;color:#555}</style>
 </head><body>
 <div class="center" style="margin-bottom:10px"><div class="bold" style="font-size:16px">CARRA COFFEE</div></div>
 <div class="divider"></div>
 <table style="margin-bottom:8px">
-<tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.id}</td></tr>
+<tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.dailyNumber || order.id}</td></tr>
 <tr><td style="color:#555">Tanggal</td><td style="text-align:right">${fmtDt(order.createdAt)}</td></tr>
 <tr><td style="color:#555">Meja</td><td style="text-align:right">Meja ${order.table?.number} · ${floorLabel(order.table?.floor)}</td></tr>
 ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-align:right">${order.customerName}</td></tr>` : ''}
@@ -258,7 +258,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
           <div>
             <p className="font-bold" style={{ color: '#1C1C1A' }}>Order Baru Masuk!</p>
             <p className="text-sm" style={{ color: '#6B7560' }}>Meja {newOrder.table?.number} — {formatRupiah(newOrder.totalAmount)}</p>
-            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>{newOrder.items?.length} item · #{newOrder.id}</p>
+            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>{newOrder.items?.length} item · #{newOrder.dailyNumber || newOrder.id}</p>
           </div>
         </div>
       ), { duration: 8000 });
@@ -285,10 +285,10 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
   // Update status order
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => updateOrderStatus(id, status),
-    onSuccess: (_, { id, status }) => {
+    onSuccess: (_, { id, dailyNumber, status }) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       const label = STATUS_CONFIG[status]?.label || status;
-      toast.success(`Order #${id} → ${label}`);
+      toast.success(`Order #${dailyNumber || id} → ${label}`);
     },
     onError: () => toast.error('Gagal mengubah status'),
   });
@@ -309,7 +309,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     mutationFn: ({ id, notes, paymentMethod }) => markOrderPaid(id, notes, paymentMethod),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast.success(`Order #${payModalOrder?.id} ditandai lunas ✅`);
+      toast.success(`Order #${payModalOrder?.dailyNumber || payModalOrder?.id} ditandai lunas ✅`);
       setPayModalOrder(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal update status bayar'),
@@ -490,7 +490,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
                 {yesterdayPending.count} order kemarin belum selesai
               </p>
               <p className="text-xs truncate" style={{ color: '#9CA38F' }}>
-                {yesterdayPending.data?.slice(0, 3).map(o => `#${o.id} Meja ${o.table?.number}`).join(' · ')}
+                {yesterdayPending.data?.slice(0, 3).map(o => `#${o.dailyNumber || o.id} Meja ${o.table?.number}`).join(' · ')}
                 {yesterdayPending.count > 3 ? ` +${yesterdayPending.count - 3} lainnya` : ''}
               </p>
             </div>
@@ -656,7 +656,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             <OrderCard
               key={order.id}
               order={order}
-              onUpdateStatus={(status) => statusMutation.mutate({ id: order.id, status })}
+              onUpdateStatus={(status) => statusMutation.mutate({ id: order.id, dailyNumber: order.dailyNumber, status })}
               isUpdating={statusMutation.isPending}
               isSelected={selectedIds.has(order.id)}
               onToggleSelect={(id) => setSelectedIds((prev) => {
@@ -853,7 +853,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
               <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot} shrink-0 ${isActive ? 'animate-pulse' : ''}`} />
               {/* Order # + meja */}
               <div className="flex items-baseline gap-1.5 min-w-0">
-                <span className="font-bold text-base leading-tight" style={{ color: '#1C1C1A' }}>#{order.id}</span>
+                <span className="font-bold text-base leading-tight" style={{ color: '#1C1C1A' }}>#{order.dailyNumber || order.id}</span>
                 <span className="text-sm font-medium" style={{ color: '#6B7560' }}>
                   Meja {order.table?.number} · L{order.table?.floor}
                 </span>
@@ -1028,7 +1028,7 @@ function CancelConfirmModal({ order, onConfirm, onClose }) {
             Batalkan Order?
           </h3>
           <p className="text-sm text-center mt-2" style={{ color: '#6B7560' }}>
-            Order <span className="font-bold" style={{ color: '#1C1C1A' }}>#{order.id}</span> dari{' '}
+            Order <span className="font-bold" style={{ color: '#1C1C1A' }}>#{order.dailyNumber || order.id}</span> dari{' '}
             <span className="font-semibold">Meja {order.table?.number}</span> akan dibatalkan.
           </p>
           <p className="text-xs text-center mt-1.5 font-medium" style={{ color: '#DC2626' }}>
@@ -1102,7 +1102,7 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
         {/* Header */}
         <div className="px-4 pt-3 pb-3 border-b flex items-center justify-between" style={{ borderColor: '#E8ECE4' }}>
           <div>
-            <p className="font-bold text-sm" style={{ color: '#1C1C1A' }}>💰 Tandai Lunas — Order #{order.id}</p>
+            <p className="font-bold text-sm" style={{ color: '#1C1C1A' }}>💰 Tandai Lunas — Order #{order.dailyNumber || order.id}</p>
             {order.customerName && <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>👤 {order.customerName}</p>}
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm" style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
@@ -1229,7 +1229,7 @@ function InvoiceModal({ order, onClose }) {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Invoice #${order.id} — Carra Coffee</title>
+  <title>Invoice #${order.dailyNumber || order.id} — Carra Coffee</title>
   <style>
     @page {
       size: 58mm auto;
@@ -1262,7 +1262,7 @@ function InvoiceModal({ order, onClose }) {
   </div>
   <div class="divider"></div>
   <table style="margin-bottom:8px">
-    <tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.id}</td></tr>
+    <tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.dailyNumber || order.id}</td></tr>
     <tr><td style="color:#555">Tanggal</td><td style="text-align:right">${formatDateTime(order.createdAt)}</td></tr>
     <tr><td style="color:#555">Meja</td><td style="text-align:right">Meja ${order.table?.number} · ${floorLabel(order.table?.floor)}</td></tr>
     ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-align:right">${order.customerName}</td></tr>` : ''}
@@ -1329,7 +1329,7 @@ function InvoiceModal({ order, onClose }) {
         <div className="px-5 pt-3 pb-4 border-b shrink-0 flex items-center justify-between"
           style={{ borderColor: '#E8ECE4' }}>
           <div>
-            <p className="font-bold text-base" style={{ color: '#1C1C1A' }}>🧾 Invoice #{order.id}</p>
+            <p className="font-bold text-base" style={{ color: '#1C1C1A' }}>🧾 Invoice #{order.dailyNumber || order.id}</p>
             <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{formatDateTime(order.createdAt)}</p>
           </div>
           <button onClick={onClose}
@@ -1546,7 +1546,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
         {/* Header */}
         <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: '#E8ECE4' }}>
           <div>
-            <h2 className="font-bold text-lg" style={{ color: '#1C1C1A' }}>✏️ Edit Order #{order.id}</h2>
+            <h2 className="font-bold text-lg" style={{ color: '#1C1C1A' }}>✏️ Edit Order #{order.dailyNumber || order.id}</h2>
             <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>Meja {order.table?.number} · {floorLabel(order.table?.floor)}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm"

@@ -181,10 +181,21 @@ router.post('/', async (req, res) => {
       return sum + (basePrice + espressoExtra) * item.quantity;
     }, 0);
 
+    // Hitung dailyNumber — nomor urut order hari ini (WIB), reset tiap hari
+    const wibOffset = 7 * 60 * 60 * 1000;
+    const nowWIB = new Date(Date.now() + wibOffset);
+    const todayMidnightWIB = new Date(Date.UTC(nowWIB.getUTCFullYear(), nowWIB.getUTCMonth(), nowWIB.getUTCDate()) - wibOffset);
+    const tomorrowMidnightWIB = new Date(todayMidnightWIB.getTime() + 24 * 60 * 60 * 1000);
+    const todayOrderCount = await prisma.order.count({
+      where: { createdAt: { gte: todayMidnightWIB, lt: tomorrowMidnightWIB } },
+    });
+    const dailyNumber = todayOrderCount + 1;
+
     // Buat order + items + kurangi stok dalam satu transaction
     const [order] = await prisma.$transaction([
       prisma.order.create({
         data: {
+          dailyNumber,
           tableId,
           orderType,
           notes,

@@ -1,6 +1,4 @@
 'use client';
-// app/kasir/order-baru/page.js
-// POS sederhana — kasir input order manual untuk customer walk-in / counter
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,6 +7,16 @@ import toast from 'react-hot-toast';
 import { getMenu, getTables, createOrder, getCategories, markOrderPaid } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
+import {
+  ArrowLeft,
+  MagnifyingGlass,
+  ShoppingCart,
+  User,
+  CreditCard,
+  Clock,
+  Trash,
+  X,
+} from '@phosphor-icons/react';
 
 const floorLabel = (floor) => {
   if (String(floor) === '1') return 'Outdoor';
@@ -63,7 +71,7 @@ export default function OrderBaruPage() {
     mutationFn: createOrder,
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast.success(`Order #${res.data.id} berhasil dibuat! 🎉`);
+      toast.success(`Order #${res.data.dailyNumber || res.data.id} berhasil dibuat! 🎉`);
       router.push('/kasir');
     },
     onError: (err) => {
@@ -173,12 +181,20 @@ export default function OrderBaruPage() {
   // ── Validasi sebelum ke payment ───────────────────
   const handleSubmit = () => {
     if (cart.length === 0) { toast.error('Keranjang kosong!'); return; }
-    if (hasInvalidCartItems) return; // tombol sudah disabled, tapi guard tetap
+    if (hasInvalidCartItems) return;
+
+    const resolvedTableId = (orderType === 'take-away' || !selectedTable)
+      ? tables[0]?.id
+      : parseInt(selectedTable);
+
+    if (!resolvedTableId) {
+      toast.error('Data meja belum siap. Refresh halaman dan coba lagi.');
+      return;
+    }
 
     if (!payNow) {
-      const tableId = orderType === 'take-away' || !selectedTable ? (tables[0]?.id || 1) : parseInt(selectedTable);
       orderMutation.mutate({
-        tableId,
+        tableId: resolvedTableId,
         orderType,
         customerName: customerName.trim() || undefined,
         isPaid: false,
@@ -205,7 +221,10 @@ export default function OrderBaruPage() {
 
   // ── Final submit setelah payment confirmed ────────
   const handleConfirmPayment = (paymentMethod, receivedAmount) => {
-    const tableId = orderType === 'take-away' || !selectedTable ? (tables[0]?.id || 1) : parseInt(selectedTable);
+    const tableId = (orderType === 'take-away' || !selectedTable)
+      ? (tables[0]?.id)
+      : parseInt(selectedTable);
+    if (!tableId) { toast.error('Data meja belum siap.'); return; }
     const paymentNote = paymentMethod === 'cash'
       ? `[Bayar Cash: ${formatRupiah(receivedAmount)}, Kembalian: ${formatRupiah(receivedAmount - totalAmount)}]`
       : '[Bayar QRIS]';
@@ -247,11 +266,11 @@ export default function OrderBaruPage() {
   const orderPanelJSX = (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b shrink-0 flex items-center justify-between" style={{ borderColor: '#E8ECE4' }}>
-        <h2 className="font-bold text-sm" style={{ color: '#1C1C1A' }}>📋 Pesanan</h2>
+        <h2 className="font-bold text-sm" style={{ color: '#1A1A1A' }}>Pesanan</h2>
         <button
           onClick={() => setShowCartDrawer(false)}
           className="lg:hidden w-8 h-8 flex items-center justify-center rounded-full"
-          style={{ background: '#F7F7F5', color: '#6B7560' }}
+          style={{ background: '#F5EFE6', color: '#6B7280' }}
         >✕</button>
       </div>
 
@@ -270,7 +289,7 @@ export default function OrderBaruPage() {
             const isInvalid = !status.valid;
             return (
               <div key={cartIdx} className="rounded-xl p-3 border" style={{
-                background: isInvalid ? '#FEF2F2' : '#FAFAF8',
+                background: isInvalid ? '#FEF2F2' : '#FFFFFF',
                 borderColor: isInvalid ? '#FCA5A5' : '#E8ECE4',
               }}>
                 {/* Invalid warning banner */}
@@ -288,7 +307,7 @@ export default function OrderBaruPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: isInvalid ? '#DC2626' : '#1C1C1A' }}>{item.name}</p>
-                    <p className="text-xs" style={{ color: isInvalid ? '#FCA5A5' : '#658051' }}>
+                    <p className="text-xs" style={{ color: isInvalid ? '#FCA5A5' : '#1B4332' }}>
                       {formatRupiah((item.price + (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0)) * item.quantity)}
                     </p>
                     {/* Summary badge: temp + espresso + chips */}
@@ -308,7 +327,7 @@ export default function OrderBaruPage() {
                       }}
                       disabled={isInvalid}
                       className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white disabled:opacity-30"
-                      style={{ background: '#658051' }}>+</button>
+                      style={{ background: '#1B4332' }}>+</button>
                   </div>
                 </div>
                 {/* Notes row */}
@@ -336,15 +355,15 @@ export default function OrderBaruPage() {
       <div className="overflow-y-auto px-4 pt-3 pb-2 space-y-3 shrink-0 border-t" style={{ borderColor: '#E8ECE4', maxHeight: '55%' }}>
         {/* Order type */}
         <div>
-          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>Tipe Pesanan</p>
+          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7280' }}>Tipe Pesanan</p>
           <div className="grid grid-cols-2 gap-2">
-            {[{ value: 'dine-in', label: '🪑 Dine In' }, { value: 'take-away', label: '🥡 Take Away' }].map((opt) => (
+            {[{ value: 'dine-in', label: 'Dine In' }, { value: 'take-away', label: 'Take Away' }].map((opt) => (
               <button key={opt.value}
                 onClick={() => { setOrderType(opt.value); if (opt.value === 'take-away') setSelectedTable(''); }}
                 className="py-2 rounded-xl text-xs font-semibold border transition"
                 style={orderType === opt.value
-                  ? { background: '#658051', color: '#fff', borderColor: '#658051' }
-                  : { background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}>
+                  ? { background: '#1B4332', color: '#fff', borderColor: '#1B4332' }
+                  : { background: '#FFFFFF', color: '#6B7280', borderColor: '#E8ECE4' }}>
                 {opt.label}
               </button>
             ))}
@@ -354,13 +373,13 @@ export default function OrderBaruPage() {
         {/* Pilih meja */}
         {orderType === 'dine-in' && (
           <div>
-            <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>
+            <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7280' }}>
               Nomor Meja <span className="font-normal" style={{ color: '#9CA38F' }}>(opsional)</span>
             </p>
             {loadingTables ? <p className="text-xs" style={{ color: '#9CA38F' }}>Memuat...</p> : (
               <select value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)}
                 className="w-full rounded-xl px-3 py-2 text-sm outline-none border"
-                style={{ border: '1px solid #E8ECE4', color: selectedTable ? '#1C1C1A' : '#9CA38F', background: '#FAFAF8' }}>
+                style={{ border: '1px solid #E8ECE4', color: selectedTable ? '#1C1C1A' : '#9CA38F', background: '#FFFFFF' }}>
                 <option value="">-- Belum ditentukan --</option>
                 {tables.map((t) => (
                   <option key={t.id} value={t.id}>Meja {t.number} · {floorLabel(t.floor)}</option>
@@ -372,19 +391,19 @@ export default function OrderBaruPage() {
 
         {/* Nama Customer */}
         <div>
-          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>
+          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7280' }}>
             Nama Customer <span className="font-normal" style={{ color: '#9CA38F' }}>(opsional)</span>
           </p>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">👤</span>
+            <User size={14} weight="regular" className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }} />
             <input
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Contoh: Budi, Meja VIP..."
               className="w-full pl-9 pr-4 py-2 rounded-xl text-sm outline-none border transition"
-              style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FAFAF8' }}
-              onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+              style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FFFFFF' }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
               onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'}
             />
           </div>
@@ -392,19 +411,19 @@ export default function OrderBaruPage() {
 
         {/* Opsi Pembayaran */}
         <div>
-          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>Pembayaran</p>
+          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7280' }}>Pembayaran</p>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { value: true,  label: '💳 Bayar Sekarang', desc: 'Cash / QRIS' },
-              { value: false, label: '⏳ Bayar Nanti',    desc: 'Catat dulu' },
+              { value: true,  label: 'Bayar Sekarang', desc: 'Cash / QRIS' },
+              { value: false, label: 'Bayar Nanti',    desc: 'Catat dulu' },
             ].map((opt) => (
               <button key={String(opt.value)}
                 onClick={() => setPayNow(opt.value)}
                 className="py-2 px-2.5 rounded-xl border-2 text-left transition"
                 style={payNow === opt.value
-                  ? { borderColor: '#658051', background: '#EDF1EA' }
-                  : { borderColor: '#E8ECE4', background: '#FAFAF8' }}>
-                <p className="font-bold text-xs" style={{ color: payNow === opt.value ? '#658051' : '#1C1C1A' }}>{opt.label}</p>
+                  ? { borderColor: '#1B4332', background: '#D8F3DC' }
+                  : { borderColor: '#E8ECE4', background: '#FFFFFF' }}>
+                <p className="font-bold text-xs" style={{ color: payNow === opt.value ? '#1B4332' : '#1C1C1A' }}>{opt.label}</p>
                 <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{opt.desc}</p>
               </button>
             ))}
@@ -413,14 +432,14 @@ export default function OrderBaruPage() {
 
         {/* Catatan order */}
         <div>
-          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>
+          <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7280' }}>
             Catatan <span className="font-normal" style={{ color: '#9CA38F' }}>(opsional)</span>
           </p>
           <textarea value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)}
             placeholder="Contoh: minta kursi dekat jendela..." rows={2}
             className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none border transition"
-            style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FAFAF8' }}
-            onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+            style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FFFFFF' }}
+            onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
             onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
         </div>
       </div>
@@ -429,8 +448,8 @@ export default function OrderBaruPage() {
       <div className="px-4 pb-4 pt-3 space-y-2 shrink-0 border-t" style={{ borderColor: '#E8ECE4' }}>
         {cart.length > 0 && (
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-semibold" style={{ color: '#6B7560' }}>Total</span>
-            <span className="text-lg font-bold" style={{ color: '#658051' }}>{formatRupiah(totalAmount)}</span>
+            <span className="text-sm font-semibold" style={{ color: '#6B7280' }}>Total</span>
+            <span className="text-lg font-bold" style={{ color: '#1B4332' }}>{formatRupiah(totalAmount)}</span>
           </div>
         )}
         {hasInvalidCartItems && (
@@ -441,13 +460,13 @@ export default function OrderBaruPage() {
         <button onClick={handleSubmit}
           disabled={cart.length === 0 || orderMutation.isPending || hasInvalidCartItems}
           className="w-full py-3 rounded-xl font-bold text-sm text-white transition disabled:opacity-40"
-          style={{ background: hasInvalidCartItems ? '#DC2626' : payNow ? '#658051' : '#6B7560' }}
-          onMouseEnter={(e) => { if (cart.length > 0 && !hasInvalidCartItems) e.currentTarget.style.background = payNow ? '#4d6340' : '#4b5563'; }}
-          onMouseLeave={(e) => e.currentTarget.style.background = hasInvalidCartItems ? '#DC2626' : payNow ? '#658051' : '#6B7560'}>
+          style={{ background: hasInvalidCartItems ? '#DC2626' : payNow ? '#1B4332' : '#6B7280' }}
+          onMouseEnter={(e) => { if (cart.length > 0 && !hasInvalidCartItems) e.currentTarget.style.background = payNow ? '#2D6A4F' : '#4b5563'; }}
+          onMouseLeave={(e) => e.currentTarget.style.background = hasInvalidCartItems ? '#DC2626' : payNow ? '#1B4332' : '#6B7280'}>
           {orderMutation.isPending
             ? 'Membuat order...'
             : hasInvalidCartItems ? '⚠️ Ada menu tidak tersedia'
-            : payNow ? '💳 Lanjut ke Pembayaran →' : '⏳ Catat Order (Bayar Nanti)'}
+            : payNow ? 'Lanjut ke Pembayaran →' : 'Catat Order (Bayar Nanti)'}
         </button>
         {cart.length > 0 && (
           <button onClick={clearCart}
@@ -455,7 +474,7 @@ export default function OrderBaruPage() {
             style={{ borderColor: '#FCA5A5', color: '#DC2626' }}
             onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-            🗑️ Kosongkan Keranjang
+            Kosongkan Keranjang
           </button>
         )}
       </div>
@@ -464,17 +483,18 @@ export default function OrderBaruPage() {
 
   return (
     <StaffLayout>
-      <div className="h-screen flex flex-col" style={{ background: '#F7F7F5' }}>
+      <div className="h-screen flex flex-col" style={{ background: '#F5EFE6' }}>
 
         {/* ── Top bar ─────────────────────────────── */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3 shrink-0"
           style={{ borderColor: '#E8ECE4' }}>
           <button onClick={() => router.push('/kasir')}
             className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-xl transition shrink-0"
-            style={{ color: '#6B7560' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#EDF1EA'; e.currentTarget.style.color = '#658051'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6B7560'; }}>
-            ← <span className="hidden sm:inline">Kembali</span>
+            style={{ color: '#6B7280' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#D8F3DC'; e.currentTarget.style.color = '#1B4332'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6B7280'; }}>
+            <ArrowLeft size={15} weight="bold" />
+            <span className="hidden sm:inline">Kembali</span>
           </button>
           <div className="w-px h-5 bg-gray-200 shrink-0" />
           <div className="flex-1 min-w-0">
@@ -483,8 +503,8 @@ export default function OrderBaruPage() {
           </div>
           {totalItems > 0 && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl shrink-0"
-              style={{ background: '#EDF1EA' }}>
-              <span className="text-xs sm:text-sm font-bold" style={{ color: '#658051' }}>
+              style={{ background: '#D8F3DC' }}>
+              <span className="text-xs sm:text-sm font-bold" style={{ color: '#1B4332' }}>
                 {totalItems} item · {formatRupiah(totalAmount)}
               </span>
             </div>
@@ -500,28 +520,28 @@ export default function OrderBaruPage() {
             {/* Search + category tabs */}
             <div className="bg-white border-b px-3 sm:px-4 py-3 space-y-2 shrink-0" style={{ borderColor: '#E8ECE4' }}>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">🔍</span>
+                <MagnifyingGlass size={15} weight="regular" className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9CA3AF' }} />
                 <input type="text" placeholder="Cari menu..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 rounded-xl text-sm outline-none border transition"
-                  style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FAFAF8' }}
-                  onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+                  style={{ border: '1px solid #E8ECE4', color: '#1C1C1A', background: '#FFFFFF' }}
+                  onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
                   onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
               </div>
               <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
                 <button onClick={() => setActiveCategory('semua')}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
                   style={activeCategory === 'semua'
-                    ? { background: '#658051', color: '#fff' }
-                    : { background: '#F7F7F5', color: '#6B7560' }}>
+                    ? { background: '#1B4332', color: '#fff' }
+                    : { background: '#F5EFE6', color: '#6B7280' }}>
                   Semua
                 </button>
                 {filteredCategories.map((cat) => (
                   <button key={cat.slug} onClick={() => setActiveCategory(cat.slug)}
                     className="px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition shrink-0"
                     style={activeCategory === cat.slug
-                      ? { background: '#658051', color: '#fff' }
-                      : { background: '#F7F7F5', color: '#6B7560' }}>
+                      ? { background: '#1B4332', color: '#fff' }
+                      : { background: '#F5EFE6', color: '#6B7280' }}>
                     {cat.emoji} {cat.label}
                   </button>
                 ))}
@@ -568,7 +588,7 @@ export default function OrderBaruPage() {
                             <p className="font-semibold text-sm leading-tight truncate" style={{ color: disabled ? '#9CA38F' : '#1C1C1A' }}>
                               {item.name}
                             </p>
-                            <p className="text-xs font-semibold mt-0.5" style={{ color: disabled ? '#9CA38F' : '#658051' }}>
+                            <p className="text-xs font-semibold mt-0.5" style={{ color: disabled ? '#9CA38F' : '#1B4332' }}>
                               {formatRupiah(item.price)}
                             </p>
                           </div>
@@ -583,7 +603,7 @@ export default function OrderBaruPage() {
                               style={
                                 atMax    ? { background: '#FEF3C7', color: '#92400E' } :
                                 lowStock ? { background: '#FEE2E2', color: '#DC2626' } :
-                                           { background: '#EDF1EA', color: '#658051' }
+                                           { background: '#D8F3DC', color: '#1B4332' }
                               }
                             >
                               {atMax ? 'Maks!' : `Sisa ${remaining}`}
@@ -603,9 +623,9 @@ export default function OrderBaruPage() {
                             <button
                               onClick={() => handleAddItem(item)}
                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition"
-                              style={{ background: '#658051' }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#4d6340'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}
+                              style={{ background: '#1B4332' }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#2D6A4F'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = '#1B4332'}
                             >
                               + Tambah
                             </button>
@@ -626,7 +646,7 @@ export default function OrderBaruPage() {
                                 onClick={() => handleIncrementItem(item)}
                                 disabled={atMax}
                                 className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white disabled:opacity-30"
-                                style={{ background: atMax ? '#D97706' : '#658051' }}
+                                style={{ background: atMax ? '#D97706' : '#1B4332' }}
                               >+</button>
                             </div>
                           )}
@@ -649,12 +669,12 @@ export default function OrderBaruPage() {
         {/* ── Mobile: floating cart button ────────── */}
         {totalItems > 0 && (
           <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 z-20"
-            style={{ background: 'linear-gradient(to top, #F7F7F5 60%, transparent)' }}>
+            style={{ background: 'linear-gradient(to top, #F5EFE6 60%, transparent)' }}>
             <button onClick={() => setShowCartDrawer(true)}
               className="w-full py-4 rounded-2xl font-bold text-sm text-white flex items-center justify-between px-5 shadow-lg"
-              style={{ background: '#658051' }}>
+              style={{ background: '#1B4332' }}>
               <span className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-xs font-bold"
-                style={{ color: '#658051' }}>{totalItems}</span>
+                style={{ color: '#1B4332' }}>{totalItems}</span>
               <span>Lihat Pesanan</span>
               <span className="font-bold">{formatRupiah(totalAmount)}</span>
             </button>
@@ -768,7 +788,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
           <div className="flex items-center gap-3 mb-5">
             <div
               className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center text-2xl"
-              style={{ background: '#F7F7F5' }}
+              style={{ background: '#F5EFE6' }}
             >
               {item.imageUrl
                 // eslint-disable-next-line @next/next/no-img-element
@@ -777,7 +797,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
             </div>
             <div>
               <h3 className="font-bold text-lg leading-tight" style={{ color: '#1C1C1A' }}>{item.name}</h3>
-              <p className="font-semibold mt-0.5" style={{ color: '#658051' }}>{fmt(item.price)}</p>
+              <p className="font-semibold mt-0.5" style={{ color: '#1B4332' }}>{fmt(item.price)}</p>
             </div>
           </div>
 
@@ -800,8 +820,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
                       className="flex flex-col items-center gap-1.5 py-4 rounded-2xl border-2 transition active:scale-95"
                       style={{
                         borderColor: isActive ? opt.activeBorder : '#E8ECE4',
-                        background:  isActive ? opt.activeBg : '#FAFAF8',
-                        color:       isActive ? opt.activeColor : '#6B7560',
+                        background:  isActive ? opt.activeBg : '#FFFFFF',
+                        color:       isActive ? opt.activeColor : '#6B7280',
                       }}
                     >
                       <span className="text-3xl">{opt.emoji}</span>
@@ -828,22 +848,22 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
                     onClick={() => setEspressoShots((s) => Math.max(0, s - 1))}
                     disabled={espressoShots === 0}
                     className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition disabled:opacity-30"
-                    style={{ borderColor: '#E8ECE4', color: '#658051' }}>
+                    style={{ borderColor: '#E8ECE4', color: '#1B4332' }}>
                     −
                   </button>
                   <span className="w-8 text-center font-bold text-lg" style={{ color: '#1C1C1A' }}>{espressoShots}</span>
                   <button
                     onClick={() => setEspressoShots((s) => Math.min(10, s + 1))}
                     className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition"
-                    style={{ borderColor: '#658051', background: '#EDF1EA', color: '#658051' }}>
+                    style={{ borderColor: '#1B4332', background: '#D8F3DC', color: '#1B4332' }}>
                     +
                   </button>
                 </div>
               </div>
               {espressoShots > 0 && (
-                <div className="rounded-xl px-3 py-2 flex items-center justify-between" style={{ background: '#EDF1EA' }}>
-                  <span className="text-xs font-semibold" style={{ color: '#658051' }}>☕ {espressoShots} shot extra</span>
-                  <span className="text-xs font-bold" style={{ color: '#658051' }}>
+                <div className="rounded-xl px-3 py-2 flex items-center justify-between" style={{ background: '#D8F3DC' }}>
+                  <span className="text-xs font-semibold" style={{ color: '#1B4332' }}>☕ {espressoShots} shot extra</span>
+                  <span className="text-xs font-bold" style={{ color: '#1B4332' }}>
                     +{fmt(espressoShots * (item.additionalEspressoPrice || 3000))}
                   </span>
                 </div>
@@ -869,8 +889,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
                     style={disabled
                       ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', cursor: 'not-allowed', textDecoration: 'line-through' }
                       : active
-                      ? { background: '#EDF1EA', color: '#658051', borderColor: '#658051' }
-                      : { background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}
+                      ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
+                      : { background: '#FFFFFF', color: '#6B7280', borderColor: '#E8ECE4' }}
                   >
                     {disabled ? chip : active ? `✓ ${chip}` : `+ ${chip}`}
                   </button>
@@ -884,7 +904,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
               rows={2}
               className="w-full rounded-xl px-4 py-3 text-sm resize-none outline-none border"
               style={{ border: '1.5px solid #E8ECE4', color: '#1C1C1A' }}
-              onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
               onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'}
             />
           </div>
@@ -901,7 +921,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
             })}
             disabled={!canConfirm}
             className="w-full py-4 rounded-2xl font-bold text-base text-white transition disabled:opacity-40"
-            style={{ background: '#658051' }}
+            style={{ background: '#1B4332' }}
           >
             {needsTemp && !selectedTemp ? 'Pilih suhu dulu' : 'Tambah ke Keranjang'}
           </button>
@@ -974,32 +994,32 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
 
           <div className="px-4 pt-3 pb-3 flex items-center justify-between border-b" style={{ borderColor: '#E8ECE4' }}>
             <div>
-              <h3 className="font-bold text-base" style={{ color: '#1C1C1A' }}>💳 Pembayaran</h3>
+              <h3 className="font-bold text-base" style={{ color: '#1A1A1A' }}>Pembayaran</h3>
             </div>
             <button onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
-              style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+              style={{ background: '#F5EFE6', color: '#6B7280' }}>✕</button>
           </div>
 
           <div className="px-4 pt-3 pb-4 space-y-3">
 
-            <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#EDF1EA' }}>
-              <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Total Tagihan</p>
-              <p className="text-xl font-bold" style={{ color: '#658051' }}>{fmt(totalAmount)}</p>
+            <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#D8F3DC' }}>
+              <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>Total Tagihan</p>
+              <p className="text-xl font-bold" style={{ color: '#1B4332' }}>{fmt(totalAmount)}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               {[
-                { value: 'cash', label: '💵 Cash',  desc: 'Bayar tunai' },
-                { value: 'qris', label: '📱 QRIS',  desc: 'Scan QR code' },
+                { value: 'cash', label: 'Cash',  desc: 'Bayar tunai' },
+                { value: 'qris', label: 'QRIS',  desc: 'Scan QR code' },
               ].map((opt) => (
                 <button key={opt.value}
                   onClick={() => { setMethod(opt.value); setReceivedRaw(''); }}
                   className="py-2.5 px-3 rounded-xl border-2 text-left transition"
                   style={method === opt.value
-                    ? { borderColor: '#658051', background: '#EDF1EA' }
-                    : { borderColor: '#E8ECE4', background: '#FAFAF8' }}>
-                  <p className="font-bold text-sm" style={{ color: method === opt.value ? '#658051' : '#1C1C1A' }}>{opt.label}</p>
+                    ? { borderColor: '#1B4332', background: '#D8F3DC' }
+                    : { borderColor: '#E8ECE4', background: '#FFFFFF' }}>
+                  <p className="font-bold text-sm" style={{ color: method === opt.value ? '#1B4332' : '#1C1C1A' }}>{opt.label}</p>
                   <p className="text-xs" style={{ color: '#9CA38F' }}>{opt.desc}</p>
                 </button>
               ))}
@@ -1008,30 +1028,30 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
             {method === 'cash' && (
               <div className="space-y-3">
                 <div className="rounded-2xl px-4 py-3 border-2 transition"
-                  style={{ borderColor: received > 0 ? (change >= 0 ? '#658051' : '#DC2626') : '#E8ECE4', background: '#FAFAF8' }}>
+                  style={{ borderColor: received > 0 ? (change >= 0 ? '#1B4332' : '#DC2626') : '#E8ECE4', background: '#FFFFFF' }}>
                   <p className="text-xs font-semibold mb-0.5" style={{ color: '#9CA38F' }}>Uang Diterima</p>
-                  <p className="text-2xl font-bold tracking-wide" style={{ color: received > 0 ? (change >= 0 ? '#658051' : '#DC2626') : '#C8CCBE' }}>
+                  <p className="text-2xl font-bold tracking-wide" style={{ color: received > 0 ? (change >= 0 ? '#1B4332' : '#DC2626') : '#C8CCBE' }}>
                     {received > 0 ? fmt(received) : 'Rp —'}
                   </p>
                   {received > 0 && (
-                    <p className="text-xs mt-0.5 font-semibold" style={{ color: change >= 0 ? '#658051' : '#DC2626' }}>
+                    <p className="text-xs mt-0.5 font-semibold" style={{ color: change >= 0 ? '#1B4332' : '#DC2626' }}>
                       {change >= 0 ? `✅ Kembalian ${fmt(change)}` : `⚠️ Kurang ${fmt(Math.abs(change))}`}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7560' }}>Cepat</p>
+                  <p className="text-xs font-semibold mb-1.5" style={{ color: '#6B7280' }}>Cepat</p>
                   <div className="grid grid-cols-4 gap-1.5">
                     {quickAmounts.map((amt) => (
                       <button key={amt}
                         onClick={() => setReceivedRaw(String(amt))}
                         className="py-2 rounded-xl text-xs font-bold border transition"
                         style={received === amt
-                          ? { background: '#658051', color: '#fff', borderColor: '#658051' }
-                          : { background: '#FAFAF8', color: '#1C1C1A', borderColor: '#E8ECE4' }}
-                        onMouseEnter={(e) => { if (received !== amt) e.currentTarget.style.background = '#EDF1EA'; }}
-                        onMouseLeave={(e) => { if (received !== amt) e.currentTarget.style.background = '#FAFAF8'; }}>
+                          ? { background: '#1B4332', color: '#fff', borderColor: '#1B4332' }
+                          : { background: '#FFFFFF', color: '#1C1C1A', borderColor: '#E8ECE4' }}
+                        onMouseEnter={(e) => { if (received !== amt) e.currentTarget.style.background = '#D8F3DC'; }}
+                        onMouseLeave={(e) => { if (received !== amt) e.currentTarget.style.background = '#FFFFFF'; }}>
                         {amt >= 1000000
                           ? `${(amt / 1000000).toFixed(amt % 1000000 === 0 ? 0 : 1)}jt`
                           : `${amt / 1000}rb`}
@@ -1051,8 +1071,8 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                           className="rounded-2xl font-bold flex items-center justify-center transition select-none"
                           style={{
                             height: '3.25rem',
-                            background: isBackspace ? '#FEF2F2' : isClear ? '#F7F7F5' : '#FAFAF8',
-                            color:      isBackspace ? '#DC2626'  : isClear ? '#6B7560' : '#1C1C1A',
+                            background: isBackspace ? '#FEF2F2' : isClear ? '#F5EFE6' : '#FFFFFF',
+                            color:      isBackspace ? '#DC2626'  : isClear ? '#6B7280' : '#1C1C1A',
                             border:     `1.5px solid ${isBackspace ? '#FECACA' : '#E8ECE4'}`,
                             fontSize:   isBackspace ? '1.1rem' : '1.2rem',
                           }}
@@ -1071,7 +1091,7 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                         className="rounded-2xl font-bold flex items-center justify-center transition select-none"
                         style={{
                           height: '3.25rem',
-                          background: '#FAFAF8',
+                          background: '#FFFFFF',
                           color: '#1C1C1A',
                           border: '1.5px solid #E8ECE4',
                           fontSize: '1.1rem',
@@ -1089,7 +1109,7 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
             )}
 
             {method === 'qris' && (
-              <div className="rounded-2xl p-5 text-center border-2 border-dashed" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
+              <div className="rounded-2xl p-5 text-center border-2 border-dashed" style={{ borderColor: '#E8ECE4', background: '#FFFFFF' }}>
                 <p className="text-4xl mb-3">📱</p>
                 <p className="text-sm font-bold" style={{ color: '#1C1C1A' }}>Perlihatkan QRIS ke customer</p>
                 <p className="text-xs mt-1.5" style={{ color: '#9CA38F' }}>
@@ -1103,19 +1123,19 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                 onClick={() => onConfirm(method, received)}
                 disabled={!canConfirm || isPending}
                 className="w-full py-4 rounded-2xl font-bold text-sm text-white transition disabled:opacity-40"
-                style={{ background: '#658051' }}
-                onMouseEnter={(e) => { if (canConfirm && !isPending) e.currentTarget.style.background = '#4d6340'; }}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}>
+                style={{ background: '#1B4332' }}
+                onMouseEnter={(e) => { if (canConfirm && !isPending) e.currentTarget.style.background = '#2D6A4F'; }}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#1B4332'}>
                 {isPending
-                  ? '⏳ Membuat order...'
+                  ? 'Membuat order...'
                   : method === 'cash'
-                    ? canConfirm ? `✅ Konfirmasi · Kembalian ${fmt(change)}` : 'Masukkan jumlah uang diterima'
-                    : '✅ Konfirmasi Pembayaran QRIS'}
+                    ? canConfirm ? `Konfirmasi · Kembalian ${fmt(change)}` : 'Masukkan jumlah uang diterima'
+                    : 'Konfirmasi Pembayaran QRIS'}
               </button>
               <button onClick={onClose}
                 className="w-full py-2.5 rounded-xl text-sm font-medium border transition"
-                style={{ borderColor: '#E8ECE4', color: '#6B7560' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#F7F7F5'}
+                style={{ borderColor: '#E8ECE4', color: '#6B7280' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#F5EFE6'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                 ← Kembali ke Pesanan
               </button>
@@ -1143,9 +1163,9 @@ function NoteModal({ item, onSave, onClose }) {
             <button key={note}
               onClick={() => setNotes((prev) => prev ? `${prev}, ${note}` : note)}
               className="px-3 py-1.5 rounded-full text-xs font-medium border transition"
-              style={{ background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#EDF1EA'; e.currentTarget.style.color = '#658051'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#FAFAF8'; e.currentTarget.style.color = '#6B7560'; }}>
+              style={{ background: '#FFFFFF', color: '#6B7280', borderColor: '#E8ECE4' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#D8F3DC'; e.currentTarget.style.color = '#1B4332'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.color = '#6B7280'; }}>
               + {note}
             </button>
           ))}
@@ -1154,16 +1174,16 @@ function NoteModal({ item, onSave, onClose }) {
           placeholder="Contoh: less ice, no sugar..." rows={3}
           className="w-full rounded-xl px-4 py-3 text-sm resize-none outline-none border mb-4"
           style={{ border: '1.5px solid #E8ECE4', color: '#1C1C1A' }}
-          onFocus={(e) => e.currentTarget.style.borderColor = '#658051'}
+          onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
           onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'}
           autoFocus />
         <div className="flex gap-2">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl text-sm border font-medium"
-            style={{ borderColor: '#E8ECE4', color: '#6B7560' }}>Batal</button>
+            style={{ borderColor: '#E8ECE4', color: '#6B7280' }}>Batal</button>
           <button onClick={() => onSave(notes)}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
-            style={{ background: '#658051' }}>Simpan</button>
+            style={{ background: '#1B4332' }}>Simpan</button>
         </div>
       </div>
     </div>
