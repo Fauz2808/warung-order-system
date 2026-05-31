@@ -18,7 +18,7 @@ const tableSchema = z.object({
 router.get('/', async (req, res) => {
   try {
     const tables = await prisma.table.findMany({
-      orderBy: [{ floor: 'asc' }, { number: 'asc' }],
+      orderBy: { number: 'asc' },
     });
     res.json({ success: true, data: tables });
   } catch (error) {
