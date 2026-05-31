@@ -78,6 +78,7 @@ function flashTabTitle(count = 6) {
 export default function KasirPage() {
   const { user, loading, logout } = useAuth(); // proteksi halaman
   const router = useRouter();
+  const [showAllDates, setShowAllDates] = useState(false);
   const [activeStatus, setActiveStatus] = useState('semua');
   const [activeFloor, setActiveFloor] = useState('semua');
   const [activePayment, setActivePayment] = useState('semua');
@@ -215,8 +216,8 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
 
   // Semua hooks harus dipanggil sebelum early return
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['orders'],
-    queryFn: () => getOrders(),
+    queryKey: ['orders', showAllDates],
+    queryFn: () => getOrders(showAllDates ? { date: 'all' } : undefined),
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
     refetchOnMount: true,
@@ -472,7 +473,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             </div>
           </div>
           <button
-            onClick={() => window.open(`/kasir?date=all`, '_self')}
+            onClick={() => setShowAllDates(true)}
             className="text-xs shrink-0 px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap"
             style={{ background: '#FEE2E2', color: '#DC2626' }}>
             Lihat Semua
@@ -495,6 +496,22 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
           <span>＋</span> Buat Order
         </button>
       </div>
+
+      {/* Banner mode "semua tanggal" */}
+      {showAllDates && (
+        <div className="px-4 lg:px-6 py-2.5 flex items-center justify-between gap-3"
+          style={{ background: '#EFF6FF', borderBottom: '1px solid #BFDBFE' }}>
+          <p className="text-sm" style={{ color: '#1D4ED8' }}>
+            📅 Menampilkan semua order (semua tanggal)
+          </p>
+          <button
+            onClick={() => setShowAllDates(false)}
+            className="text-xs px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap"
+            style={{ background: '#DBEAFE', color: '#1D4ED8' }}>
+            Kembali ke Hari Ini
+          </button>
+        </div>
+      )}
 
       {/* Stats bar — klik untuk filter status */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3 px-3 sm:px-6 py-3 sm:py-4">
