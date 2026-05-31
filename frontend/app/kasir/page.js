@@ -389,6 +389,21 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             <p className="text-xs" style={{ color: '#9CA38F' }}>Total order hari ini</p>
             <p className="text-lg font-bold" style={{ color: '#658051' }}>{orders.length} order</p>
           </div>
+          {/* Notifikasi order kemarin — bell dengan badge */}
+          {(yesterdayPending?.count ?? 0) > 0 && (
+            <button
+              onClick={() => setShowAllDates(true)}
+              className="relative flex items-center justify-center w-10 h-10 rounded-xl border transition"
+              style={{ borderColor: '#FECACA', background: '#FEE2E2' }}
+              title={`${yesterdayPending.count} order kemarin belum selesai`}
+            >
+              <span className="text-lg">🔔</span>
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center text-white"
+                style={{ background: '#DC2626' }}>
+                {yesterdayPending.count}
+              </span>
+            </button>
+          )}
           {/* Printer connect toggle — desktop only (Web Bluetooth tidak support iOS/mobile) */}
           <button
             onClick={handleConnectPrinter}
@@ -481,20 +496,36 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
         </div>
       )}
 
-      {/* Pendapatan mobile */}
-      <div className="lg:hidden bg-white border-b px-4 py-2 flex items-center justify-between"
+      {/* Mobile header bar */}
+      <div className="lg:hidden bg-white border-b px-4 py-2 flex items-center justify-between gap-2"
         style={{ borderColor: '#E8ECE4' }}>
         <div>
           <p className="text-xs" style={{ color: '#9CA38F' }}>Total order hari ini</p>
           <p className="text-sm font-bold" style={{ color: '#658051' }}>{orders.length} order</p>
         </div>
-        <button
-          onClick={() => router.push('/kasir/order-baru')}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-semibold text-xs text-white"
-          style={{ background: '#658051' }}
-        >
-          <span>＋</span> Buat Order
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Bell notifikasi order kemarin — mobile */}
+          {(yesterdayPending?.count ?? 0) > 0 && (
+            <button
+              onClick={() => setShowAllDates(true)}
+              className="relative flex items-center justify-center w-9 h-9 rounded-xl border"
+              style={{ borderColor: '#FECACA', background: '#FEE2E2' }}
+            >
+              <span className="text-base">🔔</span>
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs font-bold flex items-center justify-center text-white"
+                style={{ background: '#DC2626', fontSize: '10px' }}>
+                {yesterdayPending.count}
+              </span>
+            </button>
+          )}
+          <button
+            onClick={() => router.push('/kasir/order-baru')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-semibold text-xs text-white"
+            style={{ background: '#658051' }}
+          >
+            <span>＋</span> Buat Order
+          </button>
+        </div>
       </div>
 
       {/* Banner mode "semua tanggal" */}
