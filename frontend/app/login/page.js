@@ -209,19 +209,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Hint akun owner */}
-            <div
-              className="mt-5 p-3 rounded-xl text-center"
-              style={{ background: '#FFF8EC', border: '1px solid #F59E0B' }}
-            >
-              <p className="text-xs font-semibold" style={{ color: '#92660A' }}>👑 Akun Owner:</p>
-              <p className="text-xs font-mono mt-0.5" style={{ color: '#6B7560' }}>
-                username: <strong style={{ color: '#1C1C1A' }}>owner</strong>
-                {' · '}
-                password: <strong style={{ color: '#1C1C1A' }}>owner123</strong>
-              </p>
-              <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>Buat akun kasir di Pengaturan setelah login</p>
-            </div>
           </div>
 
           {/* Footer link */}
