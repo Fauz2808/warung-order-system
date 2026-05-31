@@ -54,23 +54,20 @@ router.get('/summary', async (req, res) => {
   try {
     const { start, end } = getTodayRange();
 
-    const [totalOrders, doneOrders, cancelledOrders, revenue, totalItems] = await Promise.all([
-      // Total order hari ini
+    const doneWhere = { status: 'done', createdAt: { gte: start, lte: end } };
+
+    const [totalOrders, doneOrders, cancelledOrders, revenue, totalItems, cashRevenue, qrisRevenue, cashOrders, qrisOrders] = await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: start, lte: end } } }),
-      // Order selesai
-      prisma.order.count({ where: { status: 'done', createdAt: { gte: start, lte: end } } }),
-      // Order dibatalkan
+      prisma.order.count({ where: doneWhere }),
       prisma.order.count({ where: { status: 'cancelled', createdAt: { gte: start, lte: end } } }),
-      // Total pendapatan (order done)
-      prisma.order.aggregate({
-        where: { status: 'done', createdAt: { gte: start, lte: end } },
-        _sum: { totalAmount: true },
-      }),
-      // Total item terjual
-      prisma.orderItem.aggregate({
-        where: { order: { status: 'done', createdAt: { gte: start, lte: end } } },
-        _sum: { quantity: true },
-      }),
+      prisma.order.aggregate({ where: doneWhere, _sum: { totalAmount: true } }),
+      prisma.orderItem.aggregate({ where: { order: doneWhere }, _sum: { quantity: true } }),
+      // Breakdown Cash
+      prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'cash' }, _sum: { totalAmount: true } }),
+      // Breakdown QRIS
+      prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'qris' }, _sum: { totalAmount: true } }),
+      prisma.order.count({ where: { ...doneWhere, paymentMethod: 'cash' } }),
+      prisma.order.count({ where: { ...doneWhere, paymentMethod: 'qris' } }),
     ]);
 
     res.json({
@@ -82,6 +79,10 @@ router.get('/summary', async (req, res) => {
         pendingOrders: totalOrders - doneOrders - cancelledOrders,
         revenue: revenue._sum.totalAmount || 0,
         totalItems: totalItems._sum.quantity || 0,
+        cashRevenue: cashRevenue._sum.totalAmount || 0,
+        qrisRevenue: qrisRevenue._sum.totalAmount || 0,
+        cashOrders,
+        qrisOrders,
       },
     });
   } catch (error) {
@@ -232,13 +233,14 @@ router.get('/export', async (req, res) => {
     // Header kolom
     rows.push([
       'No', 'Order ID', 'Tanggal', 'Jam', 'Meja', 'Lantai',
-      'Tipe Order', 'Status', 'Menu (nama x qty)', 'Subtotal Item', 'Catatan Order', 'Total',
+      'Tipe Order', 'Metode Bayar', 'Status', 'Menu (nama x qty)', 'Subtotal Item', 'Catatan Order', 'Total',
     ]);
 
     // Data order
     let no = 1;
     for (const order of orders) {
       // Satu baris per item — merge info order di baris pertama
+      const payLabel = order.paymentMethod === 'qris' ? 'QRIS' : 'Cash';
       if (order.items.length === 0) {
         rows.push([
           no++,
@@ -248,6 +250,7 @@ router.get('/export', async (req, res) => {
           order.table?.number || '-',
           order.table?.floor || '-',
           order.orderType === 'take-away' ? 'Take Away' : 'Dine In',
+          payLabel,
           order.status,
           '-', '-',
           order.notes || '',
@@ -256,13 +259,14 @@ router.get('/export', async (req, res) => {
       } else {
         order.items.forEach((item, idx) => {
           rows.push([
-            idx === 0 ? no++ : '',           // No — hanya baris pertama
-            idx === 0 ? order.id : '',        // Order ID
+            idx === 0 ? no++ : '',
+            idx === 0 ? order.id : '',
             idx === 0 ? new Date(order.createdAt).toLocaleDateString('id-ID') : '',
             idx === 0 ? new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '',
             idx === 0 ? (order.table?.number || '-') : '',
             idx === 0 ? (order.table?.floor  || '-') : '',
             idx === 0 ? (order.orderType === 'take-away' ? 'Take Away' : 'Dine In') : '',
+            idx === 0 ? payLabel : '',
             idx === 0 ? order.status : '',
             `${item.menu?.name || 'Unknown'} x${item.quantity}${item.notes ? ` (${item.notes})` : ''}`,
             item.price * item.quantity,
@@ -278,6 +282,8 @@ router.get('/export', async (req, res) => {
     rows.push(['RINGKASAN']);
     rows.push(['Total Order', orders.length]);
     rows.push(['Total Pendapatan', orders.reduce((s, o) => s + o.totalAmount, 0)]);
+    rows.push(['Pendapatan Cash', orders.filter((o) => o.paymentMethod !== 'qris').reduce((s, o) => s + o.totalAmount, 0)]);
+    rows.push(['Pendapatan QRIS', orders.filter((o) => o.paymentMethod === 'qris').reduce((s, o) => s + o.totalAmount, 0)]);
     rows.push(['Order Dine In', orders.filter((o) => o.orderType !== 'take-away').length]);
     rows.push(['Order Take Away', orders.filter((o) => o.orderType === 'take-away').length]);
 

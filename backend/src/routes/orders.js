@@ -322,18 +322,21 @@ router.put('/:id/status', async (req, res) => {
 });
 
 // PATCH /api/orders/:id/mark-paid — tandai order sudah lunas (kasir)
-// Body: { notes: "..." } — opsional, untuk catat metode bayar
+// Body: { notes: "...", paymentMethod: "cash" | "qris" }
 router.patch('/:id/mark-paid', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { notes } = req.body; // opsional: "[Bayar Cash: Rp50.000, Kembalian: Rp0]"
+    const { notes, paymentMethod } = req.body;
 
     const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
     }
 
-    const updateData = { isPaid: true };
+    const updateData = {
+      isPaid: true,
+      paymentMethod: paymentMethod === 'qris' ? 'qris' : 'cash',
+    };
     // Append catatan pembayaran ke notes yang sudah ada
     if (notes) {
       updateData.notes = existing.notes

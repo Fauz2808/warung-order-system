@@ -306,7 +306,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
 
   // Mark paid — di KasirPage supaya modal render di root (fix stacking context dari swipe transform)
   const rootMarkPaidMutation = useMutation({
-    mutationFn: ({ id, notes }) => markOrderPaid(id, notes),
+    mutationFn: ({ id, notes, paymentMethod }) => markOrderPaid(id, notes, paymentMethod),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       toast.success(`Order #${payModalOrder?.id} ditandai lunas ✅`);
@@ -706,7 +706,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     {payModalOrder && (
       <QuickPayModal
         order={payModalOrder}
-        onConfirm={(notes) => rootMarkPaidMutation.mutate({ id: payModalOrder.id, notes })}
+        onConfirm={({ notes, paymentMethod }) => rootMarkPaidMutation.mutate({ id: payModalOrder.id, notes, paymentMethod })}
         onClose={() => setPayModalOrder(null)}
         isPending={rootMarkPaidMutation.isPending}
       />
@@ -1080,10 +1080,10 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
   const canSubmit = method === 'qris' || (method === 'cash' && received >= order.totalAmount);
 
   const handleConfirm = () => {
-    const payNote = method === 'cash'
+    const notes = method === 'cash'
       ? `[Bayar Cash: ${fmt(received)}, Kembalian: ${fmt(change)}]`
       : '[Bayar QRIS]';
-    onConfirm(payNote);
+    onConfirm({ notes, paymentMethod: method });
   };
 
   const NUMPAD = ['1','2','3','4','5','6','7','8','9','C','0','⌫'];

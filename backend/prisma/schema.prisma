@@ -8,7 +8,7 @@ generator client {
 // ⚠️  LOCAL DEV: ganti ke provider = "sqlite"
 // ⚠️  PRODUCTION (Railway): provider = "postgresql"
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -58,8 +58,9 @@ model Order {
   totalAmount  Int         // total harga dalam Rupiah
   notes        String?     // catatan tambahan dari customer
   customerName String?     // nama customer, opsional (diisi kasir)
-  isPaid       Boolean     @default(false)  // false = belum bayar, true = sudah lunas
-  createdAt    DateTime    @default(now())
+  isPaid         Boolean     @default(false)  // false = belum bayar, true = sudah lunas
+  paymentMethod  String      @default("cash")  // "cash" | "qris"
+  createdAt      DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   items        OrderItem[]
 }

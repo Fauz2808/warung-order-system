@@ -186,6 +186,51 @@ export default function LaporanPage() {
         />
       </div>
 
+      {/* Breakdown Tipe Transaksi */}
+      <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="mb-4">
+          <h2 className="font-bold text-gray-800">💳 Tipe Transaksi Hari Ini</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Breakdown pendapatan berdasarkan metode pembayaran</p>
+        </div>
+
+        {loadingSummary ? (
+          <div className="text-center py-6 text-gray-400">Memuat data...</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              {/* Cash */}
+              <div className="rounded-2xl border p-4 bg-emerald-50 border-emerald-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">💵</span>
+                  <span className="text-xs text-gray-500 font-medium">Cash</span>
+                </div>
+                <p className="text-xl font-black text-emerald-600">
+                  {formatRupiah(summary?.cashRevenue || 0)}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{summary?.cashOrders || 0} transaksi</p>
+              </div>
+              {/* QRIS */}
+              <div className="rounded-2xl border p-4 bg-violet-50 border-violet-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">📱</span>
+                  <span className="text-xs text-gray-500 font-medium">QRIS</span>
+                </div>
+                <p className="text-xl font-black text-violet-600">
+                  {formatRupiah(summary?.qrisRevenue || 0)}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{summary?.qrisOrders || 0} transaksi</p>
+              </div>
+            </div>
+
+            <PaymentBreakdownBar
+              doneOrders={summary?.doneOrders || 0}
+              cashRevenue={summary?.cashRevenue || 0}
+              qrisRevenue={summary?.qrisRevenue || 0}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Grafik Pendapatan Harian */}
       <div className="bg-white rounded-2xl border shadow-sm p-5">
         <div className="flex items-center justify-between mb-5">
@@ -360,6 +405,25 @@ function KpiCard({ icon, label, value, sub, color }) {
       </div>
       <p className={`text-2xl font-black ${textColors[color]}`}>{value}</p>
       <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+    </div>
+  );
+}
+
+function PaymentBreakdownBar({ doneOrders, cashRevenue, qrisRevenue }) {
+  if (doneOrders === 0) return null;
+  const total = cashRevenue + qrisRevenue;
+  const cashPct = total > 0 ? Math.round((cashRevenue / total) * 100) : 0;
+  const qrisPct = 100 - cashPct;
+  return (
+    <div>
+      <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+        <span>💵 Cash {cashPct}%</span>
+        <span>QRIS {qrisPct}% 📱</span>
+      </div>
+      <div className="h-3 rounded-full bg-violet-100 overflow-hidden flex">
+        <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${cashPct}%` }} />
+        <div className="h-full bg-violet-400 transition-all duration-500" style={{ width: `${qrisPct}%` }} />
+      </div>
     </div>
   );
 }
