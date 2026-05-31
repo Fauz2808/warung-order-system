@@ -726,6 +726,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const [animatingSuccess, setAnimatingSuccess] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const touchStartX = useRef(null);
 
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
@@ -955,7 +956,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
             )}
             {order.status === 'pending' && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleStatusUpdate('cancelled'); }}
+                onClick={(e) => { e.stopPropagation(); setShowCancelConfirm(true); }}
                 disabled={isUpdating || animatingSuccess}
                 className="px-4 py-2 rounded-xl font-semibold text-sm border transition disabled:opacity-40"
                 style={{ borderColor: '#FCA5A5', color: '#DC2626', background: 'transparent' }}
@@ -993,6 +994,64 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
         )}
 
       </div>
+
+      {/* Modal konfirmasi batalkan order */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            {/* Icon area */}
+            <div className="flex flex-col items-center pt-7 pb-4 px-6">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 text-3xl"
+                style={{ background: '#FEE2E2' }}>
+                🗑️
+              </div>
+              <h3 className="text-lg font-bold text-center" style={{ color: '#1C1C1A' }}>
+                Batalkan Order?
+              </h3>
+              <p className="text-sm text-center mt-2" style={{ color: '#6B7560' }}>
+                Order <span className="font-bold" style={{ color: '#1C1C1A' }}>#{order.id}</span> dari{' '}
+                <span className="font-semibold">Meja {order.table?.number}</span> akan dibatalkan.
+              </p>
+              <p className="text-xs text-center mt-1.5 font-medium" style={{ color: '#DC2626' }}>
+                Tindakan ini tidak bisa dibatalkan.
+              </p>
+            </div>
+
+            {/* Item summary */}
+            <div className="mx-6 mb-4 px-3 py-2 rounded-xl border text-sm" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
+              <p className="font-semibold mb-1" style={{ color: '#DC2626' }}>
+                {order.items?.length} item · {formatRupiah(order.totalAmount)}
+              </p>
+              <p className="text-xs" style={{ color: '#9CA38F' }}>
+                {order.items?.slice(0, 3).map((i) => `${i.quantity}× ${i.menuName || i.menu?.name}`).join(', ')}
+                {(order.items?.length || 0) > 3 ? ` +${order.items.length - 3} lainnya` : ''}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 py-3 rounded-xl font-semibold text-sm border transition"
+                style={{ borderColor: '#E8ECE4', color: '#6B7560', background: '#F7F7F5' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#EDF1EA'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#F7F7F5'}>
+                Kembali
+              </button>
+              <button
+                onClick={() => { setShowCancelConfirm(false); handleStatusUpdate('cancelled'); }}
+                disabled={isUpdating}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-white transition disabled:opacity-50"
+                style={{ background: '#DC2626' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#B91C1C'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#DC2626'}>
+                Ya, Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
