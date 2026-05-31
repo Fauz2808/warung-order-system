@@ -3,6 +3,7 @@
 // Dashboard kasir — terima order real-time, update status
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -995,12 +996,11 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
 
       </div>
 
-      {/* Modal konfirmasi batalkan order */}
-      {showCancelConfirm && (
+      {/* Modal konfirmasi batalkan order — portal ke body agar tidak terpotong card */}
+      {showCancelConfirm && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-            {/* Icon area */}
             <div className="flex flex-col items-center pt-7 pb-4 px-6">
               <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 text-3xl"
                 style={{ background: '#FEE2E2' }}>
@@ -1017,8 +1017,6 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
                 Tindakan ini tidak bisa dibatalkan.
               </p>
             </div>
-
-            {/* Item summary */}
             <div className="mx-6 mb-4 px-3 py-2 rounded-xl border text-sm" style={{ background: '#FEF2F2', borderColor: '#FECACA' }}>
               <p className="font-semibold mb-1" style={{ color: '#DC2626' }}>
                 {order.items?.length} item · {formatRupiah(order.totalAmount)}
@@ -1028,8 +1026,6 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
                 {(order.items?.length || 0) > 3 ? ` +${order.items.length - 3} lainnya` : ''}
               </p>
             </div>
-
-            {/* Actions */}
             <div className="flex gap-3 px-6 pb-6">
               <button
                 onClick={() => setShowCancelConfirm(false)}
@@ -1050,7 +1046,8 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
