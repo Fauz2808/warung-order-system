@@ -11,6 +11,12 @@ import useCartStore from '@/store/cartStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSocket } from '@/lib/socket';
 
+const floorLabel = (floor) => {
+  if (String(floor) === '1') return 'Outdoor';
+  if (String(floor) === '2') return 'Indoor';
+  return `Lantai ${floor}`;
+};
+
 // ─── Design tokens ────────────────────────────────────
 // Primary: #658051 (earthy olive green)
 const PRIMARY       = '#658051';
@@ -328,7 +334,7 @@ export default function MejaPage() {
               Meja {table?.number}
             </h1>
             <p className="text-sm mt-0.5" style={{ color: '#9CA38F' }}>
-              Lantai {table?.floor}
+              {floorLabel(table?.floor)}
             </p>
           </div>
           {getTotalItems() > 0 && (

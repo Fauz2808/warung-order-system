@@ -10,6 +10,12 @@ import { getMenu, getTables, createOrder, getCategories, markOrderPaid } from '@
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
 
+const floorLabel = (floor) => {
+  if (String(floor) === '1') return 'Outdoor';
+  if (String(floor) === '2') return 'Indoor';
+  return `Lantai ${floor}`;
+};
+
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
@@ -357,7 +363,7 @@ export default function OrderBaruPage() {
                 style={{ border: '1px solid #E8ECE4', color: selectedTable ? '#1C1C1A' : '#9CA38F', background: '#FAFAF8' }}>
                 <option value="">-- Belum ditentukan --</option>
                 {tables.map((t) => (
-                  <option key={t.id} value={t.id}>Meja {t.number} · Lantai {t.floor}</option>
+                  <option key={t.id} value={t.id}>Meja {t.number} · {floorLabel(t.floor)}</option>
                 ))}
               </select>
             )}

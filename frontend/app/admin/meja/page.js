@@ -11,6 +11,12 @@ import { getTables, createTable, deleteTable } from '@/lib/api';
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ||
   (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001');
 
+const floorLabel = (floor) => {
+  if (String(floor) === '1') return 'Outdoor';
+  if (String(floor) === '2') return 'Indoor';
+  return `Lantai ${floor}`;
+};
+
 export default function AdminMejaPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -41,7 +47,7 @@ export default function AdminMejaPage() {
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(
-      `Meja ${showQR.number} · Lantai ${showQR.floor} · Carra Coffee`,
+      `Meja ${showQR.number} · ${floorLabel(showQR.floor)} · Carra Coffee`,
       out.width / 2,
       canvas.height + padding + labelH / 2 + 4,
     );
@@ -126,7 +132,7 @@ export default function AdminMejaPage() {
                   : { backgroundColor: '#FFFFFF', color: '#6B7560', border: '1px solid #E8ECE4' }
               }
             >
-              {f === 'semua' ? 'Semua Lantai' : `Lantai ${f}`}
+              {f === 'semua' ? 'Semua' : floorLabel(f)}
             </button>
           ))}
         </div>
@@ -161,7 +167,7 @@ export default function AdminMejaPage() {
               {/* Nomor + lantai */}
               <div className="text-center">
                 <p className="text-3xl font-black" style={{ color: '#1C1C1A' }}>{table.number}</p>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>Lantai {table.floor}</p>
+                <p className="text-xs" style={{ color: '#9CA38F' }}>{floorLabel(table.floor)}</p>
               </div>
 
               {/* Status badge */}
@@ -217,7 +223,7 @@ export default function AdminMejaPage() {
 
             <p className="text-sm mb-1" style={{ color: '#9CA38F' }}>QR Code</p>
             <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1C1A' }}>Meja {showQR.number}</h2>
-            <p className="text-sm mb-6" style={{ color: '#9CA38F' }}>Lantai {showQR.floor}</p>
+            <p className="text-sm mb-6" style={{ color: '#9CA38F' }}>{floorLabel(showQR.floor)}</p>
 
             {/* QR Code */}
             <div ref={qrRef} className="flex justify-center mb-4 p-4 bg-white rounded-2xl border-2" style={{ borderColor: '#E8ECE4' }}>
@@ -296,8 +302,8 @@ export default function AdminMejaPage() {
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#658051'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
                 >
-                  <option value="1">Lantai 1</option>
-                  <option value="2">Lantai 2</option>
+                  <option value="1">Outdoor</option>
+                  <option value="2">Indoor</option>
                   <option value="3">Lantai 3</option>
                 </select>
               </div>
