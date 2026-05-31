@@ -543,7 +543,7 @@ function OrderHistoryModal({ orders, onClose }) {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1.5 px-5 py-3 border-b overflow-x-auto">
+        <div className="flex flex-wrap gap-1.5 px-5 py-3 border-b">
           {FILTERS.map((f) => (
             <button key={f.v} onClick={() => setFilter(f.v)}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition ${
