@@ -93,22 +93,14 @@ export default function OrderBaruPage() {
     });
   };
 
-  // handleAddItem — open modal if item needs options, else add directly
+  // handleAddItem — always open modal so kasir can add notes
   const handleAddItem = (item) => {
-    if (item.hasTemperatureOption || item.hasAdditionalEspresso) {
-      setAddItemModal({ item });
-    } else {
-      addToCart(item);
-    }
+    setAddItemModal({ item });
   };
 
-  // handleIncrementItem — same: open modal for options items, increment for simple
+  // handleIncrementItem — always open modal so kasir can add notes
   const handleIncrementItem = (item) => {
-    if (item.hasTemperatureOption || item.hasAdditionalEspresso) {
-      setAddItemModal({ item });
-    } else {
-      addToCart(item);
-    }
+    setAddItemModal({ item });
   };
 
   const removeFromCart = (cartIdx) => {
