@@ -278,9 +278,10 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
   // Update status order
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => updateOrderStatus(id, status),
-    onSuccess: (_, { status }) => {
+    onSuccess: (_, { id, status }) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast.success(`Status diperbarui: ${STATUS_CONFIG[status]?.label}`);
+      const label = STATUS_CONFIG[status]?.label || status;
+      toast.success(`Order #${id} → ${label}`);
     },
     onError: () => toast.error('Gagal mengubah status'),
   });
@@ -724,26 +725,34 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const [expanded, setExpanded] = useState(true);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [animatingSuccess, setAnimatingSuccess] = useState(false);
   const touchStartX = useRef(null);
 
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const nextStatus = cfg.next;
+  const isActive = ['pending', 'preparing'].includes(order.status);
+
+  // Trigger animasi hijau dulu, baru kirim mutasi
+  const handleStatusUpdate = (status) => {
+    if (animatingSuccess || isUpdating) return;
+    setAnimatingSuccess(true);
+    setTimeout(() => onUpdateStatus(status), 450);
+  };
 
   // ── Swipe handlers ──────────────────────────────────
   const handleTouchStart = (e) => {
-    if (!nextStatus || isUpdating) return;
+    if (!nextStatus || isUpdating || animatingSuccess) return;
     touchStartX.current = e.touches[0].clientX;
     setIsSwiping(true);
   };
   const handleTouchMove = (e) => {
     if (touchStartX.current === null) return;
     const dx = e.touches[0].clientX - touchStartX.current;
-    // Max swipe 80px
     setSwipeX(Math.max(-80, Math.min(80, dx)));
   };
   const handleTouchEnd = () => {
     if (Math.abs(swipeX) >= 60 && nextStatus) {
-      onUpdateStatus(nextStatus);
+      handleStatusUpdate(nextStatus);
     }
     setSwipeX(0);
     setIsSwiping(false);
@@ -751,250 +760,239 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   };
 
   const waitMins = getWaitMinutes(order.createdAt);
-  const isUrgent = ['pending', 'preparing'].includes(order.status) && waitMins >= 10;
-  const isWarning = ['pending', 'preparing'].includes(order.status) && waitMins >= 5 && waitMins < 10;
+  const isUrgent  = isActive && waitMins >= 10;
+  const isWarning = isActive && waitMins >= 5 && waitMins < 10;
 
-  // Swipe hint label
   const swipeThreshold = 60;
   const swipeTriggered = Math.abs(swipeX) >= swipeThreshold;
   const swipeLabel = nextStatus === 'preparing' ? '👨‍🍳 Proses' : nextStatus === 'done' ? '✓ Selesai' : null;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl"
+    <div
+      className="relative overflow-hidden rounded-2xl"
+      style={{
+        opacity: animatingSuccess ? 0 : 1,
+        transform: animatingSuccess ? 'scale(0.98) translateY(-4px)' : 'scale(1) translateY(0)',
+        transition: animatingSuccess ? 'opacity 0.4s ease, transform 0.4s ease' : 'none',
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}>
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Swipe background hint */}
       {isSwiping && swipeLabel && (
         <div className="absolute inset-0 flex items-center rounded-2xl px-6"
           style={{
-            background: swipeTriggered
-              ? (nextStatus === 'done' ? '#658051' : '#2563EB')
-              : '#F3F4F6',
+            background: swipeTriggered ? (nextStatus === 'done' ? '#658051' : '#2563EB') : '#F3F4F6',
             justifyContent: swipeX > 0 ? 'flex-start' : 'flex-end',
             zIndex: 0,
           }}>
           <span className="font-bold text-sm" style={{ color: swipeTriggered ? '#fff' : '#9CA38F' }}>
-            {swipeX > 0 ? swipeLabel : swipeLabel}
+            {swipeLabel}
           </span>
         </div>
       )}
-      <div className="rounded-2xl shadow-sm border overflow-hidden transition relative"
+
+      <div className="rounded-2xl shadow-sm border overflow-hidden relative"
         style={{
-          background: '#FFFFFF',
+          background: animatingSuccess ? '#DCFCE7' : '#FFFFFF',
+          transition: 'background 0.3s ease',
           transform: `translateX(${swipeX}px)`,
-          transition: isSwiping ? 'none' : 'transform 0.3s ease',
+          ...(isSwiping ? {} : { transition: 'background 0.3s ease, transform 0.3s ease' }),
           zIndex: 1,
           borderColor: isUrgent ? '#EF4444' : isWarning ? '#F59E0B' : '#E8ECE4',
           borderWidth: isUrgent || isWarning ? '2px' : '1px',
           boxShadow: isUrgent ? '0 0 0 3px rgba(239,68,68,0.15)' : isWarning ? '0 0 0 3px rgba(245,158,11,0.12)' : undefined,
         }}>
-      {/* Strip atas untuk urgent/warning */}
-      {isUrgent && (
-        <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold animate-pulse"
-          style={{ background: '#EF4444', color: '#fff' }}>
-          <span>🔴</span> Menunggu {waitMins} menit — segera proses!
-        </div>
-      )}
-      {isWarning && !isUrgent && (
-        <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-semibold"
-          style={{ background: '#FEF3C7', color: '#92400E' }}>
-          <span>⚠️</span> Menunggu {waitMins} menit
-        </div>
-      )}
-      {/* Header order */}
-      <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer transition"
-        style={{ background: '#FFFFFF' }}
-        onMouseEnter={(e) => e.currentTarget.style.background = '#FAFAF8'}
-        onMouseLeave={(e) => e.currentTarget.style.background = '#FFFFFF'}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex items-center gap-3">
-          {/* Checkbox bulk select */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleSelect(order.id); }}
-            className="w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition"
-            style={{
-              borderColor: isSelected ? '#658051' : '#D1D5DB',
-              background: isSelected ? '#658051' : 'transparent',
-            }}>
-            {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-          </button>
-          {/* Status dot */}
-          <div className={`w-3 h-3 rounded-full ${cfg.dot} shrink-0 ${order.status !== 'done' ? 'animate-pulse' : ''}`} />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold" style={{ color: '#1C1C1A' }}>Order #{order.id}</span>
+
+        {/* Strip urgent/warning */}
+        {isUrgent && (
+          <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold animate-pulse"
+            style={{ background: '#EF4444', color: '#fff' }}>
+            🔴 Menunggu {waitMins} menit — segera proses!
+          </div>
+        )}
+        {isWarning && !isUrgent && (
+          <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-semibold"
+            style={{ background: '#FEF3C7', color: '#92400E' }}>
+            ⚠️ Menunggu {waitMins} menit
+          </div>
+        )}
+
+        {/* ── Header — 2 baris hierarki, tap untuk expand ── */}
+        <div
+          className="px-4 pt-3 pb-2.5 cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {/* Baris 1: Order # + meja  |  Harga + jumlah item */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Checkbox */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(order.id); }}
+                className="w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition"
+                style={{ borderColor: isSelected ? '#658051' : '#D1D5DB', background: isSelected ? '#658051' : 'transparent' }}>
+                {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+              </button>
+              {/* Dot status */}
+              <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot} shrink-0 ${isActive ? 'animate-pulse' : ''}`} />
+              {/* Order # + meja */}
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                <span className="font-bold text-base leading-tight" style={{ color: '#1C1C1A' }}>#{order.id}</span>
+                <span className="text-sm font-medium" style={{ color: '#6B7560' }}>
+                  Meja {order.table?.number} · L{order.table?.floor}
+                </span>
+              </div>
+            </div>
+            {/* Harga + item count */}
+            <div className="text-right shrink-0">
+              <p className="font-bold text-base leading-tight" style={{ color: '#658051' }}>{formatRupiah(order.totalAmount)}</p>
+              <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{order.items?.length} item</p>
+            </div>
+          </div>
+
+          {/* Baris 2: waktu + customer + tipe  |  status + timer + payment */}
+          <div className="flex items-center justify-between gap-2 mt-1.5 ml-[34px]">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <span className="text-xs" style={{ color: '#9CA38F' }}>{formatTime(order.createdAt)}</span>
               {order.customerName && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: '#EDF1EA', color: '#658051' }}>
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded-md" style={{ background: '#EDF1EA', color: '#658051' }}>
                   👤 {order.customerName}
                 </span>
               )}
-              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${cfg.color}`}>
-                {cfg.label}
-              </span>
-              {/* Badge waktu tunggu — muncul jika pending/preparing */}
-              {['pending', 'preparing'].includes(order.status) && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={isUrgent
-                    ? { background: '#FEE2E2', color: '#DC2626' }
-                    : isWarning
-                    ? { background: '#FEF3C7', color: '#D97706' }
-                    : { background: '#F3F4F6', color: '#6B7280' }}>
+              {order.orderType === 'take-away' ? (
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded-md" style={{ background: '#F3E8FF', color: '#7C3AED', border: '1px solid #DDD6FE' }}>🥡 Take Away</span>
+              ) : (
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded-md" style={{ background: '#EDF1EA', color: '#658051', border: '1px solid #c8d8c0' }}>🪑 Dine In</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${cfg.color}`}>{cfg.label}</span>
+              {isActive && (
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded-md"
+                  style={isUrgent ? { background: '#FEE2E2', color: '#DC2626' } : isWarning ? { background: '#FEF3C7', color: '#D97706' } : { background: '#F3F4F6', color: '#6B7280' }}>
                   {isUrgent ? '🔴' : isWarning ? '🟡' : '⏱️'} {waitMins}m
                 </span>
               )}
-              {!order.isPaid && (
-                <span className="text-xs px-2 py-0.5 rounded-full border font-semibold"
-                  style={{ background: '#FEF3C7', color: '#92400E', borderColor: '#FCD34D' }}>
-                  💰 Belum Bayar
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap mt-0.5">
-              <p className="text-sm" style={{ color: '#6B7560' }}>
-                Meja {order.table?.number} · Lantai {order.table?.floor} · {formatTime(order.createdAt)}
-              </p>
-              {order.orderType === 'take-away' ? (
-                <span className="text-xs bg-purple-100 text-purple-600 border border-purple-200 rounded-full px-2 py-0.5 font-medium">🥡 Take Away</span>
-              ) : (
-                <span className="text-xs rounded-full px-2 py-0.5 font-medium border"
-                  style={{ background: '#EDF1EA', color: '#658051', borderColor: '#c8d8c0' }}>
-                  🪑 Dine In
-                </span>
+              {!order.isPaid && order.status !== 'cancelled' && (
+                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md border" style={{ background: '#FEF3C7', color: '#92400E', borderColor: '#FCD34D' }}>💰</span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right">
-            <p className="font-bold" style={{ color: '#658051' }}>{formatRupiah(order.totalAmount)}</p>
-            <p className="text-xs" style={{ color: '#9CA38F' }}>{order.items?.length} item</p>
-          </div>
-          {/* Quick action button — langsung update status tanpa expand */}
-          {nextStatus && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onUpdateStatus(nextStatus); }}
-              disabled={isUpdating}
-              className="flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-bold text-white transition shrink-0 disabled:opacity-50"
-              style={{
-                background: nextStatus === 'done' ? '#658051' : '#2563EB',
-              }}
-              title={cfg.nextLabel}
-            >
-              {nextStatus === 'done' ? '✓' : '▶'} {cfg.nextLabel}
-            </button>
-          )}
-          {/* Tombol edit order */}
-          {order.status !== 'done' && order.status !== 'cancelled' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
-              className="flex items-center gap-1 px-2.5 h-8 rounded-xl border text-xs font-semibold transition shrink-0"
-              style={{ borderColor: '#FCD34D', background: '#FEF3C7', color: '#92400E' }}
-              title="Edit pesanan"
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#FDE68A'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#FEF3C7'; }}>
-              ✏️ Edit
-            </button>
-          )}
-          {/* Tombol print langsung ke thermal printer */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onDirectPrint(order); }}
-            className="w-8 h-8 flex items-center justify-center rounded-xl border text-base transition shrink-0"
-            style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
-            title="Print Invoice"
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#EDF1EA'; e.currentTarget.style.borderColor = '#658051'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#F7F7F5'; e.currentTarget.style.borderColor = '#E8ECE4'; }}>
-            🖨️
-          </button>
-        </div>
-      </div>
 
-      {/* Catatan order — selalu tampil, tidak ikut collapsed */}
-      {order.notes && (
-        <div className="mx-4 mb-1 rounded-xl px-3 py-2.5 flex items-start gap-2 border"
-          style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
-          <span className="text-base shrink-0">📋</span>
-          <div>
-            <p className="text-xs font-semibold" style={{ color: '#92400E' }}>Catatan dari customer:</p>
-            <p className="text-sm font-medium mt-0.5" style={{ color: '#78350F' }}>{order.notes}</p>
+        {/* Catatan order — selalu tampil */}
+        {order.notes && (
+          <div className="mx-4 mb-2 rounded-xl px-3 py-2 flex items-start gap-2 border"
+            style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
+            <span className="text-sm shrink-0">📋</span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold" style={{ color: '#92400E' }}>Catatan dari customer:</p>
+              <p className="text-sm font-medium mt-0.5 break-words" style={{ color: '#78350F' }}>{order.notes}</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Detail item (expandable) */}
-      {expanded && (
-        <div className="px-4 pb-4">
-          <div className="border-t pt-3 space-y-2 mb-3" style={{ borderColor: '#E8ECE4' }}>
-            {order.items?.map((item) => (
-              <div key={item.id} className="flex items-start justify-between text-sm">
-                <div className="flex-1">
-                  <span className="font-medium" style={{ color: '#1C1C1A' }}>
-                    {item.quantity}× {item.menuName || item.menu?.name}
-                  </span>
-                  {item.notes && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-xs">⚠️</span>
-                      <p className="text-xs font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: '#FEF3C7', color: '#92400E' }}>{item.notes}</p>
-                    </div>
-                  )}
+        {/* Detail item (expandable) */}
+        {expanded && (
+          <div className="px-4 pb-3">
+            <div className="border-t pt-3 space-y-2" style={{ borderColor: '#E8ECE4' }}>
+              {order.items?.map((item) => (
+                <div key={item.id} className="flex items-start justify-between text-sm">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium" style={{ color: '#1C1C1A' }}>
+                      {item.quantity}× {item.menuName || item.menu?.name}
+                    </span>
+                    {item.notes && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-xs">⚠️</span>
+                        <p className="text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: '#FEF3C7', color: '#92400E' }}>{item.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                  <span className="ml-2 shrink-0 text-sm" style={{ color: '#6B7560' }}>{formatRupiah(item.price * item.quantity)}</span>
                 </div>
-                <span className="ml-2 shrink-0" style={{ color: '#6B7560' }}>{formatRupiah(item.price * item.quantity)}</span>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Footer — selalu visible ── */}
+        <div className="px-4 py-3 border-t flex items-center gap-2" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
+          {/* Kiri: aksi sekunder */}
+          <div className="flex items-center gap-1.5">
+            {order.status !== 'done' && order.status !== 'cancelled' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl border text-xs font-semibold transition"
+                style={{ borderColor: '#FCD34D', background: '#FEF3C7', color: '#92400E' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#FDE68A'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#FEF3C7'}>
+                ✏️ Edit
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onDirectPrint(order); }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border text-base transition"
+              style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
+              title="Print Invoice"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#EDF1EA'; e.currentTarget.style.borderColor = '#658051'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#F7F7F5'; e.currentTarget.style.borderColor = '#E8ECE4'; }}>
+              🖨️
+            </button>
           </div>
 
-          {/* Tombol aksi */}
-          {cfg.next && (
-            <div className="flex gap-2">
+          {/* Kanan: aksi primer */}
+          <div className="flex-1 flex items-center justify-end gap-2">
+            {order.status === 'done' && (
+              <span className="text-sm font-medium flex items-center gap-1.5" style={{ color: '#658051' }}>
+                ✅ Selesai — {formatTime(order.updatedAt)}
+              </span>
+            )}
+            {order.status === 'cancelled' && (
+              <span className="text-sm font-medium" style={{ color: '#9CA38F' }}>❌ Dibatalkan</span>
+            )}
+            {order.status === 'pending' && (
               <button
-                onClick={() => onUpdateStatus(cfg.next)}
-                disabled={isUpdating}
-                className="flex-1 text-white py-2.5 rounded-xl font-semibold text-sm transition disabled:opacity-50"
-                style={{ background: '#658051' }}
-                onMouseEnter={(e) => { if (!isUpdating) e.currentTarget.style.background = '#4d6340'; }}
-                onMouseLeave={(e) => { if (!isUpdating) e.currentTarget.style.background = '#658051'; }}
-              >
-                {cfg.nextLabel}
+                onClick={(e) => { e.stopPropagation(); handleStatusUpdate('cancelled'); }}
+                disabled={isUpdating || animatingSuccess}
+                className="px-4 py-2 rounded-xl font-semibold text-sm border transition disabled:opacity-40"
+                style={{ borderColor: '#FCA5A5', color: '#DC2626', background: 'transparent' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                Batal
               </button>
-              {order.status === 'pending' && (
-                <button
-                  onClick={() => onUpdateStatus('cancelled')}
-                  disabled={isUpdating}
-                  className="px-4 py-2.5 rounded-xl font-semibold text-sm border transition hover:bg-red-50"
-                  style={{ borderColor: '#FCA5A5', color: '#DC2626' }}
-                >
-                  Batal
-                </button>
-              )}
-            </div>
-          )}
+            )}
+            {nextStatus && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(nextStatus); }}
+                disabled={isUpdating || animatingSuccess}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50 active:scale-95"
+                style={{ background: animatingSuccess ? '#16A34A' : nextStatus === 'done' ? '#658051' : '#2563EB', minWidth: '110px', justifyContent: 'center' }}>
+                {animatingSuccess
+                  ? '✓ Berhasil!'
+                  : nextStatus === 'done' ? '✓ Selesai' : '▶ Proses'}
+              </button>
+            )}
+          </div>
+        </div>
 
-          {order.status === 'done' && (
-            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#658051' }}>
-              <span>✅</span>
-              <span>Pesanan selesai — {formatTime(order.updatedAt)}</span>
-            </div>
-          )}
-
-          {/* Tombol Tandai Lunas — muncul jika belum bayar */}
-          {!order.isPaid && (
+        {/* Tandai Lunas — row terpisah jika belum bayar */}
+        {!order.isPaid && order.status !== 'cancelled' && (
+          <div className="px-4 pb-3">
             <button
               onClick={() => onOpenPayModal(order)}
-              className="w-full mt-2 py-2.5 rounded-xl font-bold text-sm transition border-2"
+              className="w-full py-2.5 rounded-xl font-bold text-sm transition border-2"
               style={{ borderColor: '#F59E0B', color: '#92400E', background: '#FFFBEB' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#FEF3C7'}
               onMouseLeave={(e) => e.currentTarget.style.background = '#FFFBEB'}>
               💰 Tandai Lunas
             </button>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-    </div>
+      </div>
     </div>
   );
 }
