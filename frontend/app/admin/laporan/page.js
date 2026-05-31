@@ -1,7 +1,7 @@
 'use client';
 // app/admin/laporan/page.js
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, LineChart, Line,
@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, Cell,
 } from 'recharts';
 import toast from 'react-hot-toast';
-import { getSummary, getChart, getTopMenu, getHourly, exportReport } from '@/lib/api';
+import { getSummary, getChart, getTopMenu, getHourly, exportReport, getOrders } from '@/lib/api';
 
 // Format YYYY-MM-DD untuk input date
 const toDateInput = (date) => date.toISOString().split('T')[0];
@@ -33,6 +33,7 @@ export default function LaporanPage() {
   const [exportStart, setExportStart] = useState(toDateInput(today));
   const [exportEnd,   setExportEnd]   = useState(toDateInput(today));
   const [exporting,   setExporting]   = useState(false);
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['summary'],
@@ -56,6 +57,15 @@ export default function LaporanPage() {
     queryFn: getHourly,
     refetchInterval: 60000,
   });
+
+  const { data: todayOrders = [], isLoading: loadingOrders } = useQuery({
+    queryKey: ['orders-history-today'],
+    queryFn: () => getOrders({}),
+    refetchInterval: 60000,
+  });
+
+  const cancelledOrders = useMemo(() => todayOrders.filter((o) => o.status === 'cancelled'), [todayOrders]);
+  const doneOrders      = useMemo(() => todayOrders.filter((o) => o.status === 'done'), [todayOrders]);
 
   // Preset tanggal untuk export
   const setPreset = (days) => {
@@ -379,6 +389,77 @@ export default function LaporanPage() {
           </ResponsiveContainer>
         )}
       </div>
+      {/* Riwayat Order Hari Ini */}
+      <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-bold text-gray-800">📋 Riwayat Order Hari Ini</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Semua order termasuk yang dibatalkan</p>
+          </div>
+          <button
+            onClick={() => setShowOrderHistory(true)}
+            className="text-xs font-semibold text-orange-500 hover:text-orange-600 border border-orange-200 hover:border-orange-300 px-3 py-1.5 rounded-xl transition"
+          >
+            Lihat Semua →
+          </button>
+        </div>
+
+        {/* Stats mini */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="rounded-xl bg-gray-50 border p-3 text-center">
+            <p className="text-xl font-black text-gray-700">{todayOrders.length}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Total Order</p>
+          </div>
+          <div className="rounded-xl bg-green-50 border border-green-100 p-3 text-center">
+            <p className="text-xl font-black text-green-600">{doneOrders.length}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Selesai</p>
+          </div>
+          <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-center">
+            <p className="text-xl font-black text-red-500">{cancelledOrders.length}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Dibatalkan</p>
+          </div>
+        </div>
+
+        {/* Preview tabel 5 order terbaru */}
+        {loadingOrders ? (
+          <div className="text-center py-6 text-gray-400 text-sm">Memuat data...</div>
+        ) : todayOrders.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 text-sm">Belum ada order hari ini</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2">Order</th>
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2">Meja</th>
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2">Waktu</th>
+                  <th className="text-right text-xs text-gray-400 font-medium pb-2">Total</th>
+                  <th className="text-center text-xs text-gray-400 font-medium pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todayOrders.slice(0, 5).map((order) => (
+                  <OrderRow key={order.id} order={order} />
+                ))}
+              </tbody>
+            </table>
+            {todayOrders.length > 5 && (
+              <button onClick={() => setShowOrderHistory(true)}
+                className="w-full mt-3 text-xs text-gray-400 hover:text-orange-500 transition py-2">
+                +{todayOrders.length - 5} order lainnya — Lihat semua
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Modal Order History */}
+      {showOrderHistory && (
+        <OrderHistoryModal
+          orders={todayOrders}
+          onClose={() => setShowOrderHistory(false)}
+        />
+      )}
     </div>
   );
 }
@@ -405,6 +486,135 @@ function KpiCard({ icon, label, value, sub, color }) {
       </div>
       <p className={`text-2xl font-black ${textColors[color]}`}>{value}</p>
       <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+    </div>
+  );
+}
+
+const STATUS_CONFIG = {
+  pending:   { label: 'Menunggu',   bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+  preparing: { label: 'Diproses',   bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200' },
+  done:      { label: 'Selesai',    bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200' },
+  cancelled: { label: 'Dibatalkan', bg: 'bg-red-50',    text: 'text-red-600',    border: 'border-red-200' },
+};
+
+function OrderRow({ order }) {
+  const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+  const time = new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  const cfg  = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+  return (
+    <tr className="border-b border-gray-50 hover:bg-gray-50 transition">
+      <td className="py-2.5 pr-3 font-semibold text-gray-700">#{order.id}</td>
+      <td className="py-2.5 pr-3 text-gray-600">Meja {order.table?.number ?? '-'}</td>
+      <td className="py-2.5 pr-3 text-gray-400 text-xs">{time}</td>
+      <td className="py-2.5 pr-3 text-right font-semibold text-gray-700">{fmt(order.totalAmount)}</td>
+      <td className="py-2.5 text-center">
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+          {cfg.label}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function OrderHistoryModal({ orders, onClose }) {
+  const [filter, setFilter] = useState('semua');
+  const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+  const filtered = filter === 'semua' ? orders : orders.filter((o) => o.status === filter);
+
+  const FILTERS = [
+    { v: 'semua',     l: `Semua (${orders.length})` },
+    { v: 'done',      l: `✅ Selesai (${orders.filter(o=>o.status==='done').length})` },
+    { v: 'cancelled', l: `❌ Dibatalkan (${orders.filter(o=>o.status==='cancelled').length})` },
+    { v: 'pending',   l: `⏳ Menunggu (${orders.filter(o=>o.status==='pending').length})` },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div>
+            <h2 className="font-bold text-gray-800">📋 Riwayat Order Hari Ini</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{orders.length} total order</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition text-sm">✕</button>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-1.5 px-5 py-3 border-b overflow-x-auto">
+          {FILTERS.map((f) => (
+            <button key={f.v} onClick={() => setFilter(f.v)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition ${
+                filter === f.v ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+              {f.l}
+            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-y-auto flex-1 px-5 py-3">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">Tidak ada order untuk filter ini</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white">
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2 pr-3">Order</th>
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2 pr-3">Meja</th>
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2 pr-3">Waktu</th>
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2 pr-3">Items</th>
+                  <th className="text-right text-xs text-gray-400 font-medium pb-2 pr-3">Total</th>
+                  <th className="text-left text-xs text-gray-400 font-medium pb-2 pr-3">Bayar</th>
+                  <th className="text-center text-xs text-gray-400 font-medium pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((order) => {
+                  const cfg  = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
+                  const time = new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                  const itemsSummary = order.items?.slice(0, 2).map((i) => `${i.menuName || i.menu?.name} x${i.quantity}`).join(', ')
+                    + (order.items?.length > 2 ? ` +${order.items.length - 2} lagi` : '');
+                  const cancelNote = order.status === 'cancelled' && order.notes
+                    ? order.notes.replace(/\[.*?\]/g, '').trim()
+                    : null;
+                  return (
+                    <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50 transition align-top">
+                      <td className="py-2.5 pr-3 font-semibold text-gray-700">#{order.id}</td>
+                      <td className="py-2.5 pr-3 text-gray-600 whitespace-nowrap">Meja {order.table?.number ?? '-'}</td>
+                      <td className="py-2.5 pr-3 text-gray-400 text-xs whitespace-nowrap">{time}</td>
+                      <td className="py-2.5 pr-3 text-gray-500 text-xs max-w-[160px]">
+                        <span className="line-clamp-2">{itemsSummary || '-'}</span>
+                        {cancelNote && (
+                          <span className="block mt-0.5 text-red-400 italic">"{cancelNote}"</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3 text-right font-semibold text-gray-700 whitespace-nowrap">{fmt(order.totalAmount)}</td>
+                      <td className="py-2.5 pr-3 text-xs text-gray-500 whitespace-nowrap">
+                        {order.paymentMethod === 'qris' ? '📱 QRIS' : order.status === 'cancelled' ? '-' : '💵 Cash'}
+                      </td>
+                      <td className="py-2.5 text-center">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                          {cfg.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer summary */}
+        <div className="px-5 py-3 border-t bg-gray-50 rounded-b-2xl flex items-center gap-4 text-xs text-gray-500">
+          <span>✅ Selesai: <strong className="text-green-600">{orders.filter(o=>o.status==='done').length}</strong></span>
+          <span>❌ Dibatalkan: <strong className="text-red-500">{orders.filter(o=>o.status==='cancelled').length}</strong></span>
+          <span>💰 Total: <strong className="text-gray-700">{fmt(orders.filter(o=>o.status==='done').reduce((s,o)=>s+o.totalAmount,0))}</strong></span>
+        </div>
+      </div>
     </div>
   );
 }
