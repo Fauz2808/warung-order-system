@@ -38,7 +38,10 @@ export const deleteMenuImage = (id) => {
 // ─── Tables ──────────────────────────────────────────
 export const getTable = (id) => api.get(`/tables/${id}`).then((r) => r.data.data);
 export const getTables = () => api.get('/tables').then((r) => r.data.data);
-export const createTable = (data) => api.post('/tables', data).then((r) => r.data);
+export const createTable = (data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.post('/tables', data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
 export const deleteTable = (id) => api.delete(`/tables/${id}`).then((r) => r.data);
 
 // ─── Orders ──────────────────────────────────────────
