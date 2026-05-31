@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories } from '@/lib/api';
+import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
@@ -218,8 +218,16 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     queryKey: ['orders'],
     queryFn: () => getOrders(),
     refetchInterval: 10000,
-    refetchOnWindowFocus: true,  // refetch saat tab/window kembali aktif
-    refetchOnMount: true,        // refetch setiap kali komponen mount (termasuk balik dari order-baru)
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    enabled: !loading,
+  });
+
+  // Order kemarin yang belum selesai — untuk banner notifikasi
+  const { data: yesterdayPending } = useQuery({
+    queryKey: ['orders-pending-yesterday'],
+    queryFn: getPendingYesterday,
+    refetchInterval: false,
     enabled: !loading,
   });
 
@@ -443,6 +451,31 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             className="text-xs shrink-0 px-2 py-1 rounded-lg font-medium transition"
             style={{ color: '#92660A', background: '#FDE68A' }}>
             Tutup
+          </button>
+        </div>
+      )}
+
+      {/* Banner order kemarin yang belum selesai */}
+      {yesterdayPending?.count > 0 && (
+        <div className="px-4 lg:px-6 py-3 flex items-center justify-between gap-3"
+          style={{ background: '#FEF2F2', borderBottom: '1px solid #FECACA' }}>
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <span className="shrink-0 text-lg">📋</span>
+            <div className="min-w-0">
+              <p className="font-semibold" style={{ color: '#DC2626' }}>
+                {yesterdayPending.count} order kemarin belum selesai
+              </p>
+              <p className="text-xs truncate" style={{ color: '#9CA38F' }}>
+                {yesterdayPending.data?.slice(0, 3).map(o => `#${o.id} Meja ${o.table?.number}`).join(' · ')}
+                {yesterdayPending.count > 3 ? ` +${yesterdayPending.count - 3} lainnya` : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => window.open(`/kasir?date=all`, '_self')}
+            className="text-xs shrink-0 px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap"
+            style={{ background: '#FEE2E2', color: '#DC2626' }}>
+            Lihat Semua
           </button>
         </div>
       )}

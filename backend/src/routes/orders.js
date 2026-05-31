@@ -34,13 +34,33 @@ const updateStatusSchema = z.object({
   }),
 });
 
-// GET /api/orders — ambil semua order (untuk kasir/dapur)
+// GET /api/orders — ambil order hari ini (WIB) untuk kasir/dapur
 router.get('/', async (req, res) => {
   try {
-    const { status, tableId, floor } = req.query;
+    const { status, tableId, floor, date } = req.query;
+
+    // Filter tanggal — default: hari ini WIB (UTC+7)
+    // date param format: YYYY-MM-DD (WIB), atau 'all' untuk semua
+    let dateFilter = {};
+    if (date !== 'all') {
+      const targetDate = date || null;
+      // Midnight WIB = UTC-7 jam sebelumnya
+      const todayWIB = targetDate
+        ? new Date(`${targetDate}T00:00:00+07:00`)
+        : (() => {
+            const now = new Date();
+            // Midnight WIB hari ini
+            const wibOffset = 7 * 60 * 60 * 1000;
+            const wibNow = new Date(now.getTime() + wibOffset);
+            return new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()) - wibOffset);
+          })();
+      const tomorrowWIB = new Date(todayWIB.getTime() + 24 * 60 * 60 * 1000);
+      dateFilter = { createdAt: { gte: todayWIB, lt: tomorrowWIB } };
+    }
 
     const orders = await prisma.order.findMany({
       where: {
+        ...dateFilter,
         ...(status ? { status } : {}),
         ...(tableId ? { tableId: parseInt(tableId) } : {}),
         ...(floor ? { table: { floor: parseInt(floor) } } : {}),
@@ -230,6 +250,27 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Gagal membuat order' });
+  }
+});
+
+// GET /api/orders/pending-yesterday — order kemarin yang belum selesai
+router.get('/pending-yesterday', async (req, res) => {
+  try {
+    const wibOffset = 7 * 60 * 60 * 1000;
+    const now = new Date();
+    const wibNow = new Date(now.getTime() + wibOffset);
+    const todayMidnightWIB = new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()) - wibOffset);
+    const orders = await prisma.order.findMany({
+      where: {
+        createdAt: { lt: todayMidnightWIB },
+        status: { in: ['pending', 'preparing'] },
+      },
+      include: { table: true, items: { include: { menu: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: orders, count: orders.length });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Gagal mengambil data' });
   }
 });
 

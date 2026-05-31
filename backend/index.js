@@ -105,6 +105,12 @@ setInterval(async () => {
   } catch (_) {}
 }, 60000);
 
+// ─── Self-ping setiap 5 menit agar Railway tidak sleep ─────────
+setInterval(() => {
+  const url = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+  require('http').get(`${url}/api/health`, () => {}).on('error', () => {});
+}, 5 * 60 * 1000);
+
 // ─── Start Server ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
