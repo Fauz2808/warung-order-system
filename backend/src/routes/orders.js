@@ -192,8 +192,18 @@ router.post('/', async (req, res) => {
     });
     const dailyNumber = todayOrderCount + 1;
 
-    // Buat order + items + kurangi stok dalam satu transaction
-    const [order] = await prisma.$transaction([
+    // Buat order + items + kurangi stok dalam satu transaction (tanpa include — fetch setelah transaction)
+    const stockUpdates = items
+      .filter((item) => menuMap[item.menuId].stock !== null)
+      .map((item) => {
+        const newStock = Math.max(0, menuMap[item.menuId].stock - item.quantity);
+        return prisma.menu.update({
+          where: { id: item.menuId },
+          data: { stock: newStock, ...(newStock === 0 ? { isAvailable: false } : {}) },
+        });
+      });
+
+    const createdOrder = await prisma.$transaction([
       prisma.order.create({
         data: {
           dailyNumber,
@@ -216,26 +226,15 @@ router.post('/', async (req, res) => {
             })),
           },
         },
-        include: {
-          table: true,
-          items: { include: { menu: true } },
-        },
       }),
-      // Kurangi stok per menu item (hanya yang punya stock != null)
-      ...items
-        .filter((item) => menuMap[item.menuId].stock !== null)
-        .map((item) => {
-          const newStock = Math.max(0, menuMap[item.menuId].stock - item.quantity);
-          return prisma.menu.update({
-            where: { id: item.menuId },
-            data: {
-              stock: newStock,
-              // Auto-unavailable kalau stok habis
-              ...(newStock === 0 ? { isAvailable: false } : {}),
-            },
-          });
-        }),
+      ...stockUpdates,
     ]);
+
+    // Fetch order lengkap dengan relasi SETELAH transaction selesai
+    const order = await prisma.order.findUnique({
+      where: { id: createdOrder[0].id },
+      include: { table: true, items: { include: { menu: true } } },
+    });
 
     // Update status meja jadi occupied
     await prisma.table.update({
