@@ -18,10 +18,10 @@ const floorLabel = (floor) => {
 };
 
 // ─── Design tokens ────────────────────────────────────
-// Primary: #658051 (earthy olive green)
-const PRIMARY       = '#658051';
-const PRIMARY_DARK  = '#4d6340';
-const PRIMARY_LIGHT = '#EDF1EA';
+// Primary: #1B4332 (earthy olive green)
+const PRIMARY       = '#1B4332';
+const PRIMARY_DARK  = '#2D6A4F';
+const PRIMARY_LIGHT = '#D8F3DC';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -159,23 +159,23 @@ export default function MejaPage() {
   // Warung tutup
   if (shopSettings && !shopSettings.isOpen) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F7F7F5' }}>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F5EFE6' }}>
         <div className="bg-white rounded-3xl shadow-lg p-8 max-w-sm w-full text-center">
           <div className="text-6xl mb-4">🌙</div>
-          <h2 className="text-2xl font-bold mb-2" style={{ color: '#1C1C1A' }}>Warung Tutup</h2>
-          <p className="text-sm mb-5" style={{ color: '#6B7560' }}>
+          <h2 className="text-2xl font-bold mb-2" style={{ color: '#1A1A1A' }}>Warung Tutup</h2>
+          <p className="text-sm mb-5" style={{ color: '#6B7280' }}>
             {shopSettings.isForceClose
               ? 'Warung sedang tutup sementara. Mohon maaf atas ketidaknyamanannya.'
               : 'Maaf, kami sedang tidak beroperasi saat ini.'}
           </p>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PRIMARY_LIGHT }}>
-            <p className="text-xs mb-1" style={{ color: '#6B7560' }}>Jam Operasional</p>
+            <p className="text-xs mb-1" style={{ color: '#6B7280' }}>Jam Operasional</p>
             <p className="text-2xl font-bold" style={{ color: PRIMARY }}>
               {shopSettings.openTime} – {shopSettings.closeTime}
             </p>
-            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>WIB · setiap hari</p>
+            <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>WIB · setiap hari</p>
           </div>
-          <p className="text-xs" style={{ color: '#9CA38F' }}>Halaman otomatis refresh saat warung buka ☕</p>
+          <p className="text-xs" style={{ color: '#9CA3AF' }}>Halaman otomatis refresh saat warung buka ☕</p>
         </div>
       </div>
     );
@@ -196,7 +196,7 @@ export default function MejaPage() {
     ];
 
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F7F7F5' }}>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F5EFE6' }}>
         <div className="bg-white rounded-3xl shadow-lg p-6 max-w-sm w-full">
 
           {/* Header */}
@@ -207,10 +207,10 @@ export default function MejaPage() {
             >
               {isDone || isReady ? '✓' : '☕'}
             </div>
-            <h2 className="text-xl font-bold" style={{ color: '#1C1C1A' }}>
+            <h2 className="text-xl font-bold" style={{ color: '#1A1A1A' }}>
               {isDone || isReady ? 'Pesanan Siap!' : 'Pesanan Diterima!'}
             </h2>
-            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>
+            <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
               Order #{orderSuccess.id}
               {orderSuccess.customerName ? ` · ${orderSuccess.customerName}` : ''}
             </p>
@@ -242,14 +242,14 @@ export default function MejaPage() {
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center border-2 text-sm"
                     style={{
-                      background: done ? PRIMARY : active ? '#FFF8EC' : '#F7F7F5',
+                      background: done ? PRIMARY : active ? '#FFF8EC' : '#F5EFE6',
                       borderColor: done ? PRIMARY : active ? '#F59E0B' : '#E8ECE4',
                       color: done ? '#fff' : active ? '#92660A' : '#C4C9BD',
                     }}
                   >
                     {done ? '✓' : step.icon}
                   </div>
-                  <p className="text-xs text-center leading-tight whitespace-nowrap" style={{ color: done || active ? '#1C1C1A' : '#C4C9BD' }}>
+                  <p className="text-xs text-center leading-tight whitespace-nowrap" style={{ color: done || active ? '#1A1A1A' : '#C4C9BD' }}>
                     {step.label}
                   </p>
                 </div>
@@ -258,17 +258,17 @@ export default function MejaPage() {
           </div>
 
           {/* Invoice */}
-          <div className="rounded-2xl p-4 mb-4" style={{ background: '#F7F7F5' }}>
+          <div className="rounded-2xl p-4 mb-4" style={{ background: '#F5EFE6' }}>
             <div className="flex justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9CA38F' }}>Detail Pesanan</p>
-              <p className="text-xs font-semibold" style={{ color: '#9CA38F' }}>Meja {table?.number}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9CA3AF' }}>Detail Pesanan</p>
+              <p className="text-xs font-semibold" style={{ color: '#9CA3AF' }}>Meja {table?.number}</p>
             </div>
             <div className="space-y-2">
               {orderSuccess.items?.map((item) => (
                 <div key={item.id}>
                   <div className="flex justify-between text-sm">
-                    <span style={{ color: '#1C1C1A' }}>{item.quantity}× {item.menuName || item.menu?.name}</span>
-                    <span style={{ color: '#6B7560' }}>{formatRupiah(item.price * item.quantity)}</span>
+                    <span style={{ color: '#1A1A1A' }}>{item.quantity}× {item.menuName || item.menu?.name}</span>
+                    <span style={{ color: '#6B7280' }}>{formatRupiah(item.price * item.quantity)}</span>
                   </div>
                   {item.notes && (
                     <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block" style={{ background: '#FEF3C7', color: '#92400E' }}>
@@ -279,7 +279,7 @@ export default function MejaPage() {
               ))}
             </div>
             <div className="border-t mt-3 pt-3 flex justify-between" style={{ borderColor: '#E8ECE4' }}>
-              <span className="font-bold text-sm" style={{ color: '#1C1C1A' }}>Total</span>
+              <span className="font-bold text-sm" style={{ color: '#1A1A1A' }}>Total</span>
               <span className="font-bold text-sm" style={{ color: PRIMARY }}>{formatRupiah(orderSuccess.totalAmount)}</span>
             </div>
           </div>
@@ -301,7 +301,7 @@ export default function MejaPage() {
             </>
           ) : (
             <div className="space-y-3">
-              <p className="text-center text-xs py-1" style={{ color: '#9CA38F' }}>
+              <p className="text-center text-xs py-1" style={{ color: '#9CA3AF' }}>
                 Mohon tunggu, kami sedang menyiapkan pesananmu ☕
                 <br />
                 <span style={{ color: '#C4C9BD' }}>Halaman ini otomatis update</span>
@@ -321,19 +321,19 @@ export default function MejaPage() {
   }
 
   return (
-    <div className="min-h-screen pb-28" style={{ background: '#F7F7F5' }}>
+    <div className="min-h-screen pb-28" style={{ background: '#F5EFE6' }}>
 
       {/* ── Header ─────────────────────────────────── */}
-      <div className="px-4 pt-10 pb-5" style={{ background: '#F7F7F5' }}>
+      <div className="px-4 pt-10 pb-5" style={{ background: '#F5EFE6' }}>
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: PRIMARY }}>
               Carra Coffee
             </p>
-            <h1 className="text-3xl font-black" style={{ color: '#1C1C1A', letterSpacing: '-0.5px' }}>
+            <h1 className="text-3xl font-black" style={{ color: '#1A1A1A', letterSpacing: '-0.5px' }}>
               Meja {table?.number}
             </h1>
-            <p className="text-sm mt-0.5" style={{ color: '#9CA38F' }}>
+            <p className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
               {floorLabel(table?.floor)}
             </p>
           </div>
@@ -358,7 +358,7 @@ export default function MejaPage() {
       {/* ── Search bar ──────────────────────────── */}
       <div className="px-4 pb-3">
         <div className="relative">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base" style={{ color: '#9CA38F' }}>🔍</span>
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base" style={{ color: '#9CA3AF' }}>🔍</span>
           <input
             type="text"
             value={searchQuery}
@@ -368,14 +368,14 @@ export default function MejaPage() {
             style={{
               background: '#fff',
               border: `1.5px solid ${searchQuery ? PRIMARY : '#E8ECE4'}`,
-              color: '#1C1C1A',
+              color: '#1A1A1A',
             }}
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{ background: '#E8ECE4', color: '#6B7560' }}>
+              style={{ background: '#E8ECE4', color: '#6B7280' }}>
               ✕
             </button>
           )}
@@ -396,7 +396,7 @@ export default function MejaPage() {
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex-shrink-0 border"
                 style={{
                   background: isActive ? PRIMARY : 'transparent',
-                  color:      isActive ? '#fff' : '#6B7560',
+                  color:      isActive ? '#fff' : '#6B7280',
                   borderColor: isActive ? PRIMARY : '#E8ECE4',
                 }}
               >
@@ -423,7 +423,7 @@ export default function MejaPage() {
             ))}
           </div>
         ) : filteredMenu.length === 0 ? (
-          <div className="text-center py-16" style={{ color: '#9CA38F' }}>
+          <div className="text-center py-16" style={{ color: '#9CA3AF' }}>
             <p className="text-4xl mb-3">☕</p>
             <p className="font-medium">Menu tidak tersedia</p>
           </div>
@@ -445,14 +445,14 @@ export default function MejaPage() {
 
       {/* ── Cart bar ────────────────────────────── */}
       {getTotalItems() > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3" style={{ background: 'linear-gradient(to top, #F7F7F5 70%, transparent)' }}>
+        <div className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3" style={{ background: 'linear-gradient(to top, #F5EFE6 70%, transparent)' }}>
           <button
             onClick={() => setShowCart(true)}
             className="w-full rounded-2xl py-4 px-5 flex items-center justify-between shadow-lg transition active:scale-95"
             style={{ background: PRIMARY }}
           >
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm" style={{ background: '#4d6340', color: '#fff' }}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm" style={{ background: '#2D6A4F', color: '#fff' }}>
                 {getTotalItems()}
               </div>
               <span className="font-semibold text-white">Lihat Pesanan</span>
@@ -544,7 +544,7 @@ function MenuCard({ item, quantity, onAdd, onRemove, needsTempChoice }) {
         {quantity > 0 && (
           <div
             className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow"
-            style={{ background: '#658051' }}
+            style={{ background: '#1B4332' }}
           >
             {quantity}
           </div>
@@ -553,12 +553,12 @@ function MenuCard({ item, quantity, onAdd, onRemove, needsTempChoice }) {
 
       {/* Info */}
       <div className="p-3">
-        <p className="font-semibold text-sm leading-tight mb-0.5 line-clamp-2" style={{ color: '#1C1C1A' }}>{item.name}</p>
+        <p className="font-semibold text-sm leading-tight mb-0.5 line-clamp-2" style={{ color: '#1A1A1A' }}>{item.name}</p>
         {item.description && (
-          <p className="text-xs line-clamp-1 mb-1.5" style={{ color: '#9CA38F' }}>{item.description}</p>
+          <p className="text-xs line-clamp-1 mb-1.5" style={{ color: '#9CA3AF' }}>{item.description}</p>
         )}
         <div className="flex items-center justify-between mt-2">
-          <p className="font-bold text-sm" style={{ color: '#658051' }}>
+          <p className="font-bold text-sm" style={{ color: '#1B4332' }}>
             {formatRupiah(item.price)}
           </p>
           {!unavailable && (
@@ -567,7 +567,7 @@ function MenuCard({ item, quantity, onAdd, onRemove, needsTempChoice }) {
                 <button
                   onClick={onRemove}
                   className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-base transition"
-                  style={{ background: '#EDF1EA', color: '#658051' }}
+                  style={{ background: '#D8F3DC', color: '#1B4332' }}
                 >
                   −
                 </button>
@@ -575,7 +575,7 @@ function MenuCard({ item, quantity, onAdd, onRemove, needsTempChoice }) {
               <button
                 onClick={onAdd}
                 className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-base text-white transition"
-                style={{ background: '#658051' }}
+                style={{ background: '#1B4332' }}
               >
                 +
               </button>
@@ -637,15 +637,15 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
         <div className="overflow-y-auto px-5 pb-5 pt-2 flex-1">
           {/* Item info */}
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center text-2xl" style={{ background: '#F7F7F5' }}>
+            <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center text-2xl" style={{ background: '#F5EFE6' }}>
               {item.imageUrl
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
                 : categoryEmoji}
             </div>
             <div>
-              <h3 className="font-bold text-lg leading-tight" style={{ color: '#1C1C1A' }}>{item.name}</h3>
-              <p className="font-semibold mt-0.5" style={{ color: '#658051' }}>
+              <h3 className="font-bold text-lg leading-tight" style={{ color: '#1A1A1A' }}>{item.name}</h3>
+              <p className="font-semibold mt-0.5" style={{ color: '#1B4332' }}>
                 {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.price)}
               </p>
             </div>
@@ -654,7 +654,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
           {/* Hot / Ice */}
           {needsTemp && (
             <div className="mb-5">
-              <p className="text-sm font-semibold mb-3" style={{ color: '#1C1C1A' }}>
+              <p className="text-sm font-semibold mb-3" style={{ color: '#1A1A1A' }}>
                 Pilih Suhu <span style={{ color: '#E84040' }}>*</span>
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -671,7 +671,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
                       style={{
                         borderColor: isActive ? opt.activeBorder : '#E8ECE4',
                         background:  isActive ? opt.activeBg : '#FAFAF8',
-                        color:       isActive ? opt.activeColor : '#6B7560',
+                        color:       isActive ? opt.activeColor : '#6B7280',
                       }}
                     >
                       <span className="text-3xl">{opt.emoji}</span>
@@ -688,8 +688,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>Additional Espresso Shot</p>
-                  <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>
+                  <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Additional Espresso Shot</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
                     +{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.additionalEspressoPrice || 3000)} per shot
                   </p>
                 </div>
@@ -698,23 +698,23 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
                     onClick={() => setEspressoShots((s) => Math.max(0, s - 1))}
                     disabled={espressoShots === 0}
                     className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition disabled:opacity-30"
-                    style={{ borderColor: '#E8ECE4', color: '#658051' }}>
+                    style={{ borderColor: '#E8ECE4', color: '#1B4332' }}>
                     −
                   </button>
-                  <span className="w-8 text-center font-bold text-lg" style={{ color: '#1C1C1A' }}>{espressoShots}</span>
+                  <span className="w-8 text-center font-bold text-lg" style={{ color: '#1A1A1A' }}>{espressoShots}</span>
                   <button
                     onClick={() => setEspressoShots((s) => Math.min(10, s + 1))}
                     className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition"
-                    style={{ borderColor: '#658051', background: '#EDF1EA', color: '#658051' }}>
+                    style={{ borderColor: '#1B4332', background: '#D8F3DC', color: '#1B4332' }}>
                     +
                   </button>
                 </div>
               </div>
               {espressoShots > 0 && (
                 <div className="rounded-xl px-3 py-2 flex items-center justify-between"
-                  style={{ background: '#EDF1EA' }}>
-                  <span className="text-xs font-semibold" style={{ color: '#658051' }}>☕ {espressoShots} shot extra</span>
-                  <span className="text-xs font-bold" style={{ color: '#658051' }}>
+                  style={{ background: '#D8F3DC' }}>
+                  <span className="text-xs font-semibold" style={{ color: '#1B4332' }}>☕ {espressoShots} shot extra</span>
+                  <span className="text-xs font-bold" style={{ color: '#1B4332' }}>
                     +{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(espressoShots * (item.additionalEspressoPrice || 3000))}
                   </span>
                 </div>
@@ -724,8 +724,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
 
           {/* Catatan */}
           <div className="mb-2">
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1C1C1A' }}>
-              Catatan <span className="font-normal text-xs" style={{ color: '#9CA38F' }}>(opsional)</span>
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1A1A1A' }}>
+              Catatan <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>(opsional)</span>
             </p>
             <div className="flex flex-wrap gap-2 mb-3">
               {quickNotes.map((chip) => {
@@ -740,8 +740,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
                     style={disabled
                       ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', cursor: 'not-allowed', textDecoration: 'line-through' }
                       : active
-                      ? { background: '#EDF1EA', color: '#658051', borderColor: '#658051' }
-                      : { background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}
+                      ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
+                      : { background: '#FAFAF8', color: '#6B7280', borderColor: '#E8ECE4' }}
                   >
                     {disabled ? chip : active ? `✓ ${chip}` : `+ ${chip}`}
                   </button>
@@ -756,8 +756,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
               className="w-full rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2"
               style={{
                 border: '1.5px solid #E8ECE4',
-                color: '#1C1C1A',
-                '--tw-ring-color': '#658051',
+                color: '#1A1A1A',
+                '--tw-ring-color': '#1B4332',
               }}
             />
           </div>
@@ -774,11 +774,11 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
             })}
             disabled={!canConfirm}
             className="w-full py-4 rounded-2xl font-bold text-base text-white transition disabled:opacity-40"
-            style={{ background: '#658051' }}
+            style={{ background: '#1B4332' }}
           >
             {needsTemp && !selectedTemp ? 'Pilih suhu dulu' : 'Tambah ke Keranjang'}
           </button>
-          <button onClick={onClose} className="w-full py-2 mt-1 text-sm" style={{ color: '#9CA38F' }}>
+          <button onClick={onClose} className="w-full py-2 mt-1 text-sm" style={{ color: '#9CA3AF' }}>
             Batal
           </button>
         </div>
@@ -796,11 +796,11 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #F0F0EC' }}>
-          <h2 className="text-lg font-bold" style={{ color: '#1C1C1A' }}>Pesanan Kamu</h2>
+          <h2 className="text-lg font-bold" style={{ color: '#1A1A1A' }}>Pesanan Kamu</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-sm transition"
-            style={{ background: '#F7F7F5', color: '#6B7560' }}
+            style={{ background: '#F5EFE6', color: '#6B7280' }}
           >
             ✕
           </button>
@@ -809,7 +809,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {/* Dine In / Take Away */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA38F' }}>Tipe Pesanan</p>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Tipe Pesanan</p>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: 'dine-in',   label: 'Dine In',   emoji: '🪑' },
@@ -822,9 +822,9 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
                     onClick={() => setOrderType(opt.value)}
                     className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition"
                     style={{
-                      borderColor: isActive ? '#658051' : '#E8ECE4',
-                      background:  isActive ? '#EDF1EA' : 'transparent',
-                      color:       isActive ? '#658051' : '#6B7560',
+                      borderColor: isActive ? '#1B4332' : '#E8ECE4',
+                      background:  isActive ? '#D8F3DC' : 'transparent',
+                      color:       isActive ? '#1B4332' : '#6B7280',
                     }}
                   >
                     <span>{opt.emoji}</span> {opt.label}
@@ -836,7 +836,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
 
           {/* Nama Customer */}
           <div style={{ borderTop: '1px solid #F0F0EC', paddingTop: '1rem' }}>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA38F' }}>Nama Kamu</p>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Nama Kamu</p>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">👤</span>
               <input
@@ -847,7 +847,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
                 className="w-full pl-9 pr-4 py-3 rounded-xl text-sm outline-none border transition"
                 style={{
                   border: '1.5px solid #E8ECE4',
-                  color: '#1C1C1A',
+                  color: '#1A1A1A',
                   background: '#FAFAF8',
                   fontFamily: 'inherit',
                 }}
@@ -859,7 +859,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
 
           {/* Item list */}
           <div style={{ borderTop: '1px solid #F0F0EC', paddingTop: '1rem' }}>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: '#9CA38F' }}>Item</p>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: '#9CA3AF' }}>Item</p>
             <div className="space-y-3">
               {items.map((item) => {
                 const menuData = menu.find((m) => m.id === item.menuId);
@@ -871,7 +871,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
                   <div key={item.menuId} className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="font-semibold text-sm" style={{ color: '#1C1C1A' }}>{item.name}</p>
+                        <p className="font-semibold text-sm" style={{ color: '#1A1A1A' }}>{item.name}</p>
                         {tempNote === 'Ice' && (
                           <span className="text-xs bg-blue-50 text-blue-500 border border-blue-100 rounded-full px-1.5 py-0.5">🧊</span>
                         )}
@@ -889,37 +889,37 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
                               className="px-2.5 py-1 rounded-lg text-xs font-semibold border transition"
                               style={item.temperature === opt.v
                                 ? { background: opt.v === 'hot' ? '#FEF3C7' : '#DBEAFE', color: opt.v === 'hot' ? '#92400E' : '#1E40AF', borderColor: opt.v === 'hot' ? '#FCD34D' : '#93C5FD' }
-                                : { background: '#F7F7F5', color: '#9CA38F', borderColor: '#E8ECE4' }}>
+                                : { background: '#F5EFE6', color: '#9CA3AF', borderColor: '#E8ECE4' }}>
                               {opt.l}
                             </button>
                           ))}
                         </div>
                       )}
                       {otherNotes && (
-                        <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>📝 {otherNotes}</p>
+                        <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>📝 {otherNotes}</p>
                       )}
                       {item.additionalEspressoShots > 0 && (
-                        <p className="text-xs mt-0.5" style={{ color: '#658051' }}>
+                        <p className="text-xs mt-0.5" style={{ color: '#1B4332' }}>
                           ☕ +{item.additionalEspressoShots} Espresso Shot (+{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.additionalEspressoShots * (item.additionalEspressoPrice || 3000))})
                         </p>
                       )}
-                      <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{formatRupiah(item.price)} / item</p>
+                      <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>{formatRupiah(item.price)} / item</p>
                     </div>
                     {/* Qty controls */}
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onRemove(item.menuId)}
                         className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm"
-                        style={{ background: '#EDF1EA', color: '#658051' }}
+                        style={{ background: '#D8F3DC', color: '#1B4332' }}
                       >−</button>
-                      <span className="w-5 text-center font-semibold text-sm" style={{ color: '#1C1C1A' }}>{item.quantity}</span>
+                      <span className="w-5 text-center font-semibold text-sm" style={{ color: '#1A1A1A' }}>{item.quantity}</span>
                       <button
                         onClick={() => menuData && onAdd(menuData)}
                         className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm text-white"
-                        style={{ background: '#658051' }}
+                        style={{ background: '#1B4332' }}
                       >+</button>
                     </div>
-                    <p className="w-16 text-right font-semibold text-sm flex-shrink-0" style={{ color: '#1C1C1A' }}>
+                    <p className="w-16 text-right font-semibold text-sm flex-shrink-0" style={{ color: '#1A1A1A' }}>
                       {formatRupiah((item.price + (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0)) * item.quantity)}
                     </p>
                   </div>
@@ -932,14 +932,14 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
         {/* Footer */}
         <div className="px-5 py-4" style={{ borderTop: '1px solid #F0F0EC' }}>
           <div className="flex justify-between items-center mb-3">
-            <span className="font-medium" style={{ color: '#6B7560' }}>Total</span>
-            <span className="text-xl font-black" style={{ color: '#1C1C1A' }}>{formatRupiah(total)}</span>
+            <span className="font-medium" style={{ color: '#6B7280' }}>Total</span>
+            <span className="text-xl font-black" style={{ color: '#1A1A1A' }}>{formatRupiah(total)}</span>
           </div>
           <button
             onClick={onOrder}
             disabled={loading}
             className="w-full py-4 rounded-2xl font-bold text-base text-white transition disabled:opacity-50"
-            style={{ background: '#658051' }}
+            style={{ background: '#1B4332' }}
           >
             {loading ? 'Mengirim...' : 'Pesan Sekarang →'}
           </button>
@@ -952,10 +952,10 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
 // ─── Loading & Error ───────────────────────────────────
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F7F7F5' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F5EFE6' }}>
       <div className="text-center">
         <div className="text-5xl mb-4">☕</div>
-        <p style={{ color: '#9CA38F' }}>Memuat menu...</p>
+        <p style={{ color: '#9CA3AF' }}>Memuat menu...</p>
       </div>
     </div>
   );
@@ -963,10 +963,10 @@ function LoadingScreen() {
 
 function ErrorScreen({ message }) {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F7F7F5' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F5EFE6' }}>
       <div className="text-center">
         <div className="text-5xl mb-4">😕</div>
-        <p style={{ color: '#6B7560' }}>{message}</p>
+        <p style={{ color: '#6B7280' }}>{message}</p>
       </div>
     </div>
   );

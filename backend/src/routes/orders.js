@@ -10,11 +10,12 @@ const router = express.Router();
 
 // Validasi order baru dari customer
 const createOrderSchema = z.object({
-  tableId:      z.number().int().positive('tableId wajib diisi'),
-  orderType:    z.enum(['dine-in', 'take-away']).default('dine-in'),
-  notes:        z.string().optional(),
-  customerName: z.string().optional(),       // nama customer (opsional)
-  isPaid:       z.boolean().default(false),  // bayar sekarang = true
+  tableId:       z.number().int().positive('tableId wajib diisi'),
+  orderType:     z.enum(['dine-in', 'take-away']).default('dine-in'),
+  notes:         z.string().optional(),
+  customerName:  z.string().optional(),
+  isPaid:        z.boolean().default(false),
+  paymentMethod: z.enum(['cash', 'qris']).default('cash'),
   items: z
     .array(
       z.object({
@@ -114,7 +115,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { tableId, orderType, notes, customerName, isPaid, items } = parsed.data;
+    const { tableId, orderType, notes, customerName, isPaid, paymentMethod, items } = parsed.data;
 
     // Cek jam operasional warung
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
@@ -201,6 +202,7 @@ router.post('/', async (req, res) => {
           notes,
           customerName: customerName || null,
           isPaid,
+          paymentMethod: isPaid ? (paymentMethod || 'cash') : 'cash',
           totalAmount,
           items: {
             create: items.map((item) => ({

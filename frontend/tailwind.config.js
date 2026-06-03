@@ -10,6 +10,16 @@ module.exports = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        carra: {
+          green:        '#1B4332',
+          'green-light':'#2D6A4F',
+          'green-pale': '#D8F3DC',
+          cream:        '#F5EFE6',
+          warm:         '#E76F00',
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
     },
   },

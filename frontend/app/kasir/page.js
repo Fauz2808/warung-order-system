@@ -11,6 +11,7 @@ import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
 import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, tryAutoReconnect, hasRememberedPrinter, watchForPrinter } from '@/lib/thermalPrinter';
+import { Printer, Bell } from '@phosphor-icons/react';
 
 const formatRupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -253,12 +254,12 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       flashTabTitle(8);
       toast.custom((t) => (
         <div className={`bg-white rounded-2xl shadow-lg p-4 flex gap-3 items-start max-w-sm ${t.visible ? 'animate-enter' : 'animate-leave'}`}
-          style={{ border: '2px solid #658051' }}>
+          style={{ border: '2px solid #1B4332' }}>
           <div className="text-2xl">🛎️</div>
           <div>
-            <p className="font-bold" style={{ color: '#1C1C1A' }}>Order Baru Masuk!</p>
-            <p className="text-sm" style={{ color: '#6B7560' }}>Meja {newOrder.table?.number} — {formatRupiah(newOrder.totalAmount)}</p>
-            <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>{newOrder.items?.length} item · #{newOrder.dailyNumber || newOrder.id}</p>
+            <p className="font-bold" style={{ color: '#1A1A1A' }}>Order Baru Masuk!</p>
+            <p className="text-sm" style={{ color: '#6B7280' }}>Meja {newOrder.table?.number} — {formatRupiah(newOrder.totalAmount)}</p>
+            <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>{newOrder.items?.length} item · #{newOrder.dailyNumber || newOrder.id}</p>
           </div>
         </div>
       ), { duration: 8000 });
@@ -345,10 +346,26 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     return 2;
   };
 
-  // Urutan prioritas status — yang belum selesai muncul duluan
-  const STATUS_PRIORITY = { pending: 0, preparing: 1, done: 2, cancelled: 3 };
+  // Prioritas sort:
+  // 0-2  = active (pending urgent/warning/normal)
+  // 3    = done + belum bayar (perlu ditagih segera)
+  // 4    = preparing
+  // 5    = done + sudah bayar
+  // 6    = cancelled
+  const sortPriority = (o) => {
+    if (o.status === 'pending') {
+      const m = getWaitMinutes(o.createdAt);
+      if (m >= 10) return 0;
+      if (m >= 5)  return 1;
+      return 2;
+    }
+    if (o.status === 'done' && !o.isPaid) return 3;
+    if (o.status === 'preparing')         return 4;
+    if (o.status === 'done')              return 5;
+    return 6; // cancelled
+  };
 
-  // Filter orders berdasarkan semua filter aktif, lalu sort by urgency → priority → time
+  // Filter + sort: priority group → dalam group by time (latest first)
   const filteredOrders = orders
     .filter((o) => {
       const statusMatch = activeStatus === 'semua' || o.status === activeStatus;
@@ -358,11 +375,9 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       return statusMatch && floorMatch && paymentMatch && typeMatch;
     })
     .sort((a, b) => {
-      const urgDiff = urgencyScore(a) - urgencyScore(b);
-      if (urgDiff !== 0) return urgDiff;
-      const pDiff = (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9);
+      const pDiff = sortPriority(a) - sortPriority(b);
       if (pDiff !== 0) return pDiff;
-      return new Date(b.createdAt) - new Date(a.createdAt);
+      return new Date(b.createdAt) - new Date(a.createdAt); // latest first dalam group
     });
 
   // Hitung jumlah order per status (untuk badge di stat cards)
@@ -384,18 +399,18 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
 
   return (
     <StaffLayout>
-    <div className="min-h-screen" style={{ background: '#F7F7F5' }}>
+    <div className="min-h-screen" style={{ background: '#F5EFE6' }}>
       {/* Header — hidden on mobile (top bar sudah ada di StaffLayout) */}
       <div className="hidden lg:flex bg-white border-b px-6 py-4 items-center justify-between sticky top-0 z-10 shadow-sm"
         style={{ borderColor: '#E8ECE4' }}>
         <div>
-          <h1 className="text-xl font-bold" style={{ color: '#1C1C1A' }}>Dashboard Kasir</h1>
-          <p className="text-sm" style={{ color: '#9CA38F' }}>Update status pesanan secara real-time</p>
+          <h1 className="text-xl font-bold" style={{ color: '#1A1A1A' }}>Dashboard Kasir</h1>
+          <p className="text-sm" style={{ color: '#9CA3AF' }}>Update status pesanan secara real-time</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-xs" style={{ color: '#9CA38F' }}>Total order hari ini</p>
-            <p className="text-lg font-bold" style={{ color: '#658051' }}>{orders.length} order</p>
+            <p className="text-xs" style={{ color: '#9CA3AF' }}>Total order hari ini</p>
+            <p className="text-lg font-bold" style={{ color: '#1B4332' }}>{orders.length} order</p>
           </div>
           {/* Notifikasi order kemarin — bell dengan badge */}
           {(yesterdayPending?.count ?? 0) > 0 && (
@@ -418,8 +433,8 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             disabled={printerConnecting}
             className="hidden lg:flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm border transition"
             style={printerName
-              ? { background: '#EDF1EA', borderColor: '#658051', color: '#658051' }
-              : { background: '#F7F7F5', borderColor: '#E8ECE4', color: '#6B7560' }}
+              ? { background: '#D8F3DC', borderColor: '#1B4332', color: '#1B4332' }
+              : { background: '#F5EFE6', borderColor: '#E8ECE4', color: '#6B7280' }}
             title={printerName ? `Terhubung ke ${printerName} — klik untuk putus` : 'Hubungkan thermal printer'}
           >
             🖨️ {printerConnecting ? '...' : printerName ? printerName : 'Printer'}
@@ -427,9 +442,9 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
           <button
             onClick={() => router.push('/kasir/order-baru')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition"
-            style={{ background: '#658051' }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#4d6340'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}
+            style={{ background: '#1B4332' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#2D6A4F'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#1B4332'}
           >
             <span>＋</span> Buat Order
           </button>
@@ -489,7 +504,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
               <p className="font-semibold" style={{ color: '#DC2626' }}>
                 {yesterdayPending.count} order kemarin belum selesai
               </p>
-              <p className="text-xs truncate" style={{ color: '#9CA38F' }}>
+              <p className="text-xs truncate" style={{ color: '#9CA3AF' }}>
                 {yesterdayPending.data?.slice(0, 3).map(o => `#${o.dailyNumber || o.id} Meja ${o.table?.number}`).join(' · ')}
                 {yesterdayPending.count > 3 ? ` +${yesterdayPending.count - 3} lainnya` : ''}
               </p>
@@ -508,8 +523,8 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       <div className="lg:hidden bg-white border-b px-4 py-2 flex items-center justify-between gap-2"
         style={{ borderColor: '#E8ECE4' }}>
         <div>
-          <p className="text-xs" style={{ color: '#9CA38F' }}>Total order hari ini</p>
-          <p className="text-sm font-bold" style={{ color: '#658051' }}>{orders.length} order</p>
+          <p className="text-xs" style={{ color: '#9CA3AF' }}>Total order hari ini</p>
+          <p className="text-sm font-bold" style={{ color: '#1B4332' }}>{orders.length} order</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Bell notifikasi order kemarin — mobile */}
@@ -529,7 +544,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
           <button
             onClick={() => router.push('/kasir/order-baru')}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-semibold text-xs text-white"
-            style={{ background: '#658051' }}
+            style={{ background: '#1B4332' }}
           >
             <span>＋</span> Buat Order
           </button>
@@ -557,7 +572,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
         {['pending', 'preparing', 'done'].map((s) => (
           <div key={s}
             className={`rounded-xl p-2.5 sm:p-3 border text-center cursor-pointer transition active:scale-95 hover:scale-105 ${STATUS_CONFIG[s].color}`}
-            style={activeStatus === s ? { outline: '2px solid #658051', outlineOffset: '2px' } : {}}
+            style={activeStatus === s ? { outline: '2px solid #1B4332', outlineOffset: '2px' } : {}}
             onClick={() => setActiveStatus(s === activeStatus ? 'semua' : s)}>
             <p className="text-xl sm:text-2xl font-bold">{counts[s] || 0}</p>
             <p className="text-xs font-medium mt-0.5">{STATUS_CONFIG[s].label}</p>
@@ -565,69 +580,59 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
         ))}
       </div>
 
-      {/* Filter bar — pembayaran, tipe pesanan, lantai */}
-      <div className="px-3 sm:px-6 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
+      {/* Filter bar — segmented containers per group */}
+      <div className="px-3 sm:px-6 pb-3 flex items-center gap-2 overflow-x-auto scrollbar-hide">
 
-        {/* Filter pembayaran */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border shrink-0"
-          style={{ borderColor: '#E8ECE4' }}>
+        {/* Payment group */}
+        <div className="flex items-center shrink-0 p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
           {[
             { value: 'semua',  label: 'Semua' },
-            { value: 'unpaid', label: unpaidCount > 0 ? `💰 Belum Bayar ${unpaidCount}` : '💰 Belum Bayar' },
-            { value: 'paid',   label: '✅ Lunas' },
+            { value: 'unpaid', label: unpaidCount > 0 ? `Belum Bayar (${unpaidCount})` : 'Belum Bayar' },
+            { value: 'paid',   label: 'Lunas' },
           ].map((opt) => (
             <button key={opt.value}
               onClick={() => setActivePayment(opt.value)}
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap"
+              className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
               style={activePayment === opt.value
-                ? { background: opt.value === 'unpaid' ? '#F59E0B' : '#658051', color: '#fff' }
-                : { color: '#6B7560' }}
-              onMouseEnter={(e) => { if (activePayment !== opt.value) e.currentTarget.style.background = '#EDF1EA'; }}
-              onMouseLeave={(e) => { if (activePayment !== opt.value) e.currentTarget.style.background = 'transparent'; }}>
+                ? { background: '#FFFFFF', color: '#1A1A1A', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
+                : { color: '#6B7280', fontWeight: 400 }
+              }>
               {opt.label}
             </button>
           ))}
         </div>
 
-        {/* Filter tipe pesanan */}
-        <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border shrink-0"
-          style={{ borderColor: '#E8ECE4' }}>
+        {/* Type group */}
+        <div className="flex items-center shrink-0 p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
           {[
             { value: 'semua',     label: 'Semua' },
-            { value: 'dine-in',   label: '🪑 Dine In' },
-            { value: 'take-away', label: '🥡 Take Away' },
+            { value: 'dine-in',   label: 'Dine In' },
+            { value: 'take-away', label: 'Take Away' },
           ].map((opt) => (
             <button key={opt.value}
               onClick={() => setActiveType(opt.value)}
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap"
+              className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
               style={activeType === opt.value
-                ? { background: '#658051', color: '#fff' }
-                : { color: '#6B7560' }}
-              onMouseEnter={(e) => { if (activeType !== opt.value) e.currentTarget.style.background = '#EDF1EA'; }}
-              onMouseLeave={(e) => { if (activeType !== opt.value) e.currentTarget.style.background = 'transparent'; }}>
+                ? { background: '#FFFFFF', color: '#1A1A1A', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
+                : { color: '#6B7280', fontWeight: 400 }
+              }>
               {opt.label}
             </button>
           ))}
         </div>
 
-        {/* Filter lantai — hanya tampil kalau ada > 1 lantai */}
+        {/* Floor group */}
         {floors.length > 1 && (
-          <div className="flex gap-1 bg-white rounded-xl p-1 shadow-sm border shrink-0"
-            style={{ borderColor: '#E8ECE4' }}>
-            <button onClick={() => setActiveFloor('semua')}
-              className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap"
-              style={activeFloor === 'semua' ? { background: '#658051', color: '#fff' } : { color: '#6B7560' }}
-              onMouseEnter={(e) => { if (activeFloor !== 'semua') e.currentTarget.style.background = '#EDF1EA'; }}
-              onMouseLeave={(e) => { if (activeFloor !== 'semua') e.currentTarget.style.background = 'transparent'; }}>
-              Semua lantai
-            </button>
-            {floors.map((f) => (
-              <button key={f} onClick={() => setActiveFloor(String(f))}
-                className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap"
-                style={activeFloor === String(f) ? { background: '#658051', color: '#fff' } : { color: '#6B7560' }}
-                onMouseEnter={(e) => { if (activeFloor !== String(f)) e.currentTarget.style.background = '#EDF1EA'; }}
-                onMouseLeave={(e) => { if (activeFloor !== String(f)) e.currentTarget.style.background = 'transparent'; }}>
-                {floorLabel(f)}
+          <div className="flex items-center shrink-0 p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
+            {[{ value: 'semua', label: 'Semua' }, ...floors.map((f) => ({ value: String(f), label: floorLabel(f) }))].map((opt) => (
+              <button key={opt.value}
+                onClick={() => setActiveFloor(opt.value)}
+                className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
+                style={activeFloor === opt.value
+                  ? { background: '#FFFFFF', color: '#1A1A1A', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
+                  : { color: '#6B7280', fontWeight: 400 }
+                }>
+                {opt.label}
               </button>
             ))}
           </div>
@@ -635,14 +640,14 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       </div>
 
       {/* Order list */}
-      <div className="px-3 sm:px-6 pb-8 space-y-3">
+      <div className="px-3 sm:px-6 pb-8">
         {isLoading ? (
-          <div className="text-center py-16" style={{ color: '#9CA38F' }}>
+          <div className="text-center py-16" style={{ color: '#9CA3AF' }}>
             <div className="text-4xl mb-2 animate-spin">⏳</div>
             <p>Memuat order...</p>
           </div>
         ) : filteredOrders.length === 0 ? (
-          <div className="text-center py-16" style={{ color: '#9CA38F' }}>
+          <div className="text-center py-16" style={{ color: '#9CA3AF' }}>
             <div className="text-5xl mb-3">📭</div>
             <p className="font-medium">Tidak ada order</p>
             <p className="text-sm mt-1">
@@ -677,7 +682,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       {/* Floating bulk action bar */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl"
-          style={{ background: '#1C1C1A', minWidth: '320px' }}>
+          style={{ background: '#1A1A1A', minWidth: '320px' }}>
           <span className="text-white font-semibold text-sm flex-1">
             {selectedIds.size} order dipilih
           </span>
@@ -687,7 +692,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
               disabled={bulkMutation.isPending}
               className="px-3 py-2 rounded-xl text-xs font-bold transition disabled:opacity-50"
               style={{
-                background: s === 'done' ? '#658051' : '#2563EB',
+                background: s === 'done' ? '#1B4332' : '#2563EB',
                 color: '#fff',
               }}>
               {s === 'done' ? '✓ Selesai' : '▶ Proses'}
@@ -747,14 +752,12 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const nextStatus = cfg.next;
   const isActive = ['pending', 'preparing'].includes(order.status);
 
-  // Trigger animasi hijau dulu, baru kirim mutasi
   const handleStatusUpdate = (status) => {
     if (animatingSuccess || isUpdating) return;
     setAnimatingSuccess(true);
     setTimeout(() => onUpdateStatus(status), 450);
   };
 
-  // ── Swipe handlers ──────────────────────────────────
   const handleTouchStart = (e) => {
     if (!nextStatus || isUpdating || animatingSuccess) return;
     touchStartX.current = e.touches[0].clientX;
@@ -766,9 +769,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
     setSwipeX(Math.max(-80, Math.min(80, dx)));
   };
   const handleTouchEnd = () => {
-    if (Math.abs(swipeX) >= 60 && nextStatus) {
-      handleStatusUpdate(nextStatus);
-    }
+    if (Math.abs(swipeX) >= 60 && nextStatus) handleStatusUpdate(nextStatus);
     setSwipeX(0);
     setIsSwiping(false);
     touchStartX.current = null;
@@ -778,237 +779,280 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const isUrgent  = isActive && waitMins >= 10;
   const isWarning = isActive && waitMins >= 5 && waitMins < 10;
 
-  const swipeThreshold = 60;
-  const swipeTriggered = Math.abs(swipeX) >= swipeThreshold;
-  const swipeLabel = nextStatus === 'preparing' ? '👨‍🍳 Proses' : nextStatus === 'done' ? '✓ Selesai' : null;
+  const swipeTriggered = Math.abs(swipeX) >= 60;
+  const swipeLabel = nextStatus === 'preparing' ? 'Proses' : nextStatus === 'done' ? 'Selesai' : null;
+
+  // Left accent color
+  const accentColor = order.status === 'pending'
+    ? (isUrgent ? '#EF4444' : isWarning ? '#F59E0B' : '#D1D5DB')
+    : order.status === 'preparing' ? '#3B82F6'
+    : order.status === 'done' && !order.isPaid ? '#F59E0B'  // amber = perlu ditagih
+    : order.status === 'done' ? '#22C55E'
+    : '#E5E7EB';
 
   return (
-    <div
-      className="relative overflow-hidden rounded-2xl"
-      style={{
-        opacity: animatingSuccess ? 0 : 1,
-        transform: animatingSuccess ? 'scale(0.98) translateY(-4px)' : 'scale(1) translateY(0)',
-        transition: animatingSuccess ? 'opacity 0.4s ease, transform 0.4s ease' : 'none',
-      }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Swipe background hint */}
-      {isSwiping && swipeLabel && (
-        <div className="absolute inset-0 flex items-center rounded-2xl px-6"
-          style={{
-            background: swipeTriggered ? (nextStatus === 'done' ? '#658051' : '#2563EB') : '#F3F4F6',
-            justifyContent: swipeX > 0 ? 'flex-start' : 'flex-end',
-            zIndex: 0,
-          }}>
-          <span className="font-bold text-sm" style={{ color: swipeTriggered ? '#fff' : '#9CA38F' }}>
-            {swipeLabel}
-          </span>
-        </div>
-      )}
-
-      <div className="rounded-2xl shadow-sm border overflow-hidden relative"
+    // Height-collapse wrapper
+    <div style={{
+      overflow: 'hidden',
+      maxHeight: animatingSuccess ? 0 : '1500px',
+      paddingBottom: animatingSuccess ? 0 : 12,
+      transition: animatingSuccess
+        ? 'max-height 0.38s cubic-bezier(0.4,0,0.2,1) 0.28s, padding-bottom 0.38s ease 0.28s'
+        : 'none',
+    }}>
+      {/* Swipe + fade wrapper */}
+      <div
+        className="relative overflow-hidden rounded-xl"
         style={{
-          background: animatingSuccess ? '#DCFCE7' : '#FFFFFF',
-          transition: 'background 0.3s ease',
-          transform: `translateX(${swipeX}px)`,
-          ...(isSwiping ? {} : { transition: 'background 0.3s ease, transform 0.3s ease' }),
-          zIndex: 1,
-          borderColor: isUrgent ? '#EF4444' : isWarning ? '#F59E0B' : '#E8ECE4',
-          borderWidth: isUrgent || isWarning ? '2px' : '1px',
-          boxShadow: isUrgent ? '0 0 0 3px rgba(239,68,68,0.15)' : isWarning ? '0 0 0 3px rgba(245,158,11,0.12)' : undefined,
-        }}>
-
-        {/* Strip urgent/warning */}
-        {isUrgent && (
-          <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold animate-pulse"
-            style={{ background: '#EF4444', color: '#fff' }}>
-            🔴 Menunggu {waitMins} menit — segera proses!
-          </div>
-        )}
-        {isWarning && !isUrgent && (
-          <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-semibold"
-            style={{ background: '#FEF3C7', color: '#92400E' }}>
-            ⚠️ Menunggu {waitMins} menit
+          opacity: animatingSuccess ? 0 : 1,
+          transform: animatingSuccess ? 'scale(0.97)' : 'scale(1)',
+          transition: animatingSuccess ? 'opacity 0.28s ease, transform 0.28s ease' : 'none',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Swipe background hint */}
+        {isSwiping && swipeLabel && (
+          <div className="absolute inset-0 flex items-center rounded-xl px-6"
+            style={{
+              background: swipeTriggered ? (nextStatus === 'done' ? '#1B4332' : '#2563EB') : '#F3F4F6',
+              justifyContent: swipeX > 0 ? 'flex-start' : 'flex-end',
+              zIndex: 0,
+            }}>
+            <span className="font-medium text-sm" style={{ color: swipeTriggered ? '#fff' : '#9CA3AF' }}>
+              {swipeLabel}
+            </span>
           </div>
         )}
 
-        {/* ── Header — 2 baris hierarki, tap untuk expand ── */}
+        {/* ── Main card ── */}
         <div
-          className="px-4 pt-3 pb-2.5 cursor-pointer"
-          onClick={() => setExpanded(!expanded)}
+          className="rounded-xl overflow-hidden relative"
+          style={{
+            background: animatingSuccess ? '#F0FDF4' : '#FFFFFF',
+            transform: `translateX(${swipeX}px)`,
+            transition: isSwiping ? 'none' : 'background 0.3s ease, transform 0.3s ease',
+            zIndex: 1,
+            border: '1px solid #E8ECE4',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+          }}
         >
-          {/* Baris 1: Order # + meja  |  Harga + jumlah item */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              {/* Checkbox */}
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggleSelect(order.id); }}
-                className="w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition"
-                style={{ borderColor: isSelected ? '#658051' : '#D1D5DB', background: isSelected ? '#658051' : 'transparent' }}>
-                {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-              </button>
-              {/* Dot status */}
-              <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot} shrink-0 ${isActive ? 'animate-pulse' : ''}`} />
-              {/* Order # + meja */}
-              <div className="flex items-baseline gap-1.5 min-w-0">
-                <span className="font-bold text-base leading-tight" style={{ color: '#1C1C1A' }}>#{order.dailyNumber || order.id}</span>
-                <span className="text-sm font-medium" style={{ color: '#6B7560' }}>
-                  Meja {order.table?.number} · L{order.table?.floor}
+          {/* Left accent strip */}
+          <div style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: 3, background: accentColor, zIndex: 2,
+          }} />
+
+          {/* Urgency banner — pending ≥ 10 menit */}
+          {isUrgent && (
+            <div className="flex items-center justify-between px-4 py-2"
+              style={{ background: '#EF4444' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-xs font-bold animate-pulse">⚡</span>
+                <span className="text-white text-xs font-semibold">
+                  Sudah menunggu {waitMins} menit — yuk segera diproses!
                 </span>
               </div>
+              <span className="text-red-200 text-xs">{waitMins}m</span>
             </div>
-            {/* Harga + item count */}
-            <div className="text-right shrink-0">
-              <p className="font-bold text-base leading-tight" style={{ color: '#658051' }}>{formatRupiah(order.totalAmount)}</p>
-              <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{order.items?.length} item</p>
-            </div>
-          </div>
+          )}
 
-          {/* Baris 2: waktu + customer + tipe  |  status + timer + payment */}
-          <div className="flex items-center justify-between gap-2 mt-1.5 ml-[34px]">
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="text-xs" style={{ color: '#9CA38F' }}>{formatTime(order.createdAt)}</span>
-              {order.customerName && (
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded-md" style={{ background: '#EDF1EA', color: '#658051' }}>
-                  👤 {order.customerName}
-                </span>
-              )}
-              {order.orderType === 'take-away' ? (
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded-md" style={{ background: '#F3E8FF', color: '#7C3AED', border: '1px solid #DDD6FE' }}>🥡 Take Away</span>
-              ) : (
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded-md" style={{ background: '#EDF1EA', color: '#658051', border: '1px solid #c8d8c0' }}>🪑 Dine In</span>
-              )}
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${cfg.color}`}>{cfg.label}</span>
-              {isActive && (
-                <span className="text-xs font-bold px-1.5 py-0.5 rounded-md"
-                  style={isUrgent ? { background: '#FEE2E2', color: '#DC2626' } : isWarning ? { background: '#FEF3C7', color: '#D97706' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                  {isUrgent ? '🔴' : isWarning ? '🟡' : '⏱️'} {waitMins}m
-                </span>
-              )}
-              {!order.isPaid && order.status !== 'cancelled' && (
-                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md border" style={{ background: '#FEF3C7', color: '#92400E', borderColor: '#FCD34D' }}>💰</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Catatan order — selalu tampil */}
-        {order.notes && (
-          <div className="mx-4 mb-2 rounded-xl px-3 py-2 flex items-start gap-2 border"
-            style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
-            <span className="text-sm shrink-0">📋</span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold" style={{ color: '#92400E' }}>Catatan dari customer:</p>
-              <p className="text-sm font-medium mt-0.5 break-words" style={{ color: '#78350F' }}>{order.notes}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Detail item (expandable) */}
-        {expanded && (
-          <div className="px-4 pb-3">
-            <div className="border-t pt-3 space-y-2" style={{ borderColor: '#E8ECE4' }}>
-              {order.items?.map((item) => (
-                <div key={item.id} className="flex items-start justify-between text-sm">
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium" style={{ color: '#1C1C1A' }}>
-                      {item.quantity}× {item.menuName || item.menu?.name}
-                    </span>
-                    {item.notes && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-xs">⚠️</span>
-                        <p className="text-xs font-medium px-2 py-0.5 rounded-full"
-                          style={{ background: '#FEF3C7', color: '#92400E' }}>{item.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                  <span className="ml-2 shrink-0 text-sm" style={{ color: '#6B7560' }}>{formatRupiah(item.price * item.quantity)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Footer — selalu visible ── */}
-        <div className="px-4 py-3 border-t flex items-center gap-2" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
-          {/* Kiri: aksi sekunder */}
-          <div className="flex items-center gap-1.5">
-            {order.status !== 'done' && order.status !== 'cancelled' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl border text-xs font-semibold transition"
-                style={{ borderColor: '#FCD34D', background: '#FEF3C7', color: '#92400E' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#FDE68A'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#FEF3C7'}>
-                ✏️ Edit
-              </button>
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); onDirectPrint(order); }}
-              className="w-9 h-9 flex items-center justify-center rounded-xl border text-base transition"
-              style={{ borderColor: '#E8ECE4', background: '#F7F7F5', color: '#6B7560' }}
-              title="Print Invoice"
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#EDF1EA'; e.currentTarget.style.borderColor = '#658051'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#F7F7F5'; e.currentTarget.style.borderColor = '#E8ECE4'; }}>
-              🖨️
-            </button>
-          </div>
-
-          {/* Kanan: aksi primer */}
-          <div className="flex-1 flex items-center justify-end gap-2">
-            {order.status === 'done' && (
-              <span className="text-sm font-medium flex items-center gap-1.5" style={{ color: '#658051' }}>
-                ✅ Selesai — {formatTime(order.updatedAt)}
+          {/* Warning banner — pending 5–9 menit */}
+          {isWarning && !isUrgent && (
+            <div className="flex items-center gap-2 px-4 py-1.5"
+              style={{ background: '#FEF3C7' }}>
+              <span className="text-xs">⏳</span>
+              <span className="text-xs font-medium" style={{ color: '#92400E' }}>
+                Menunggu {waitMins} menit — segera diproses
               </span>
-            )}
-            {order.status === 'cancelled' && (
-              <span className="text-sm font-medium" style={{ color: '#9CA38F' }}>❌ Dibatalkan</span>
-            )}
-            {order.status === 'pending' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
-                disabled={isUpdating || animatingSuccess}
-                className="px-4 py-2 rounded-xl font-semibold text-sm border transition disabled:opacity-40"
-                style={{ borderColor: '#FCA5A5', color: '#DC2626', background: 'transparent' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                Batal
-              </button>
-            )}
-            {nextStatus && (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleStatusUpdate(nextStatus); }}
-                disabled={isUpdating || animatingSuccess}
-                className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-bold text-white transition disabled:opacity-50 active:scale-95"
-                style={{ background: animatingSuccess ? '#16A34A' : nextStatus === 'done' ? '#658051' : '#2563EB', minWidth: '110px', justifyContent: 'center' }}>
-                {animatingSuccess
-                  ? '✓ Berhasil!'
-                  : nextStatus === 'done' ? '✓ Selesai' : '▶ Proses'}
-              </button>
-            )}
+            </div>
+          )}
+
+          {/* Payment reminder — done + belum bayar */}
+          {order.status === 'done' && !order.isPaid && (
+            <div className="flex items-center justify-between px-4 py-2"
+              style={{ background: '#F59E0B' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-xs font-bold">💰</span>
+                <span className="text-white text-xs font-semibold">
+                  Pesanan selesai — segera tagih pembayaran ke customer!
+                </span>
+              </div>
+              <span className="text-amber-100 text-xs font-medium">Belum bayar</span>
+            </div>
+          )}
+
+          {/* ── Header ── */}
+          <div className="pl-5 pr-4 pt-3 pb-2.5 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+
+            {/* Row 1: # + meja | harga + item count */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleSelect(order.id); }}
+                  className="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition"
+                  style={{ borderColor: isSelected ? '#1B4332' : '#D1D5DB', background: isSelected ? '#1B4332' : 'transparent' }}>
+                  {isSelected && <span className="text-white" style={{ fontSize: 9, fontWeight: 700 }}>✓</span>}
+                </button>
+                <span className="font-semibold text-sm" style={{ color: '#1A1A1A' }}>
+                  #{order.dailyNumber || order.id}
+                </span>
+                <span style={{ color: '#E5E7EB' }}>·</span>
+                <span className="text-sm truncate" style={{ color: '#6B7280' }}>
+                  Meja {order.table?.number} {floorLabel(order.table?.floor)}
+                </span>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="font-semibold text-sm" style={{ color: '#1A1A1A' }}>{formatRupiah(order.totalAmount)}</p>
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>{order.items?.length} item</p>
+              </div>
+            </div>
+
+            {/* Row 2: time + customer + type | status + timer */}
+            <div className="flex items-center justify-between gap-2 mt-1 ml-6">
+              <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                <span className="text-xs" style={{ color: '#9CA3AF' }}>{formatTime(order.createdAt)}</span>
+                {order.customerName && (
+                  <span className="text-xs" style={{ color: '#6B7280' }}>· {order.customerName}</span>
+                )}
+                <span className="text-xs" style={{ color: order.orderType === 'take-away' ? '#7C3AED' : '#9CA3AF' }}>
+                  · {order.orderType === 'take-away' ? 'Take Away' : 'Dine In'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: cfg.bg, color: cfg.text,
+                  padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 500,
+                }}>
+                  <span style={{
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: cfg.dotColor, display: 'inline-block', flexShrink: 0,
+                  }} />
+                  {cfg.label}
+                  {isActive && waitMins > 0 && (
+                    <span style={{ opacity: 0.65, marginLeft: 1 }}>· {waitMins}m</span>
+                  )}
+                </span>
+                {!order.isPaid && order.status !== 'cancelled' && (
+                  <span
+                    style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block', flexShrink: 0 }}
+                    title="Belum bayar"
+                  />
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* Catatan order */}
+          {order.notes && (
+            <div className="mx-4 mb-2 rounded-lg px-3 py-2 border-l-2"
+              style={{ borderColor: '#FCD34D', background: '#FFFBEB' }}>
+              <p className="text-xs" style={{ color: '#92400E' }}>
+                <span className="font-semibold">Catatan:</span> {order.notes}
+              </p>
+            </div>
+          )}
+
+          {/* Detail item */}
+          {expanded && (
+            <div className="px-4 pb-3">
+              <div className="pt-2.5 space-y-1.5" style={{ borderTop: '1px dashed #E5E7EB' }}>
+                {order.items?.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm" style={{ color: '#374151' }}>
+                        {item.quantity}× {item.menuName || item.menu?.name}
+                      </span>
+                      {item.notes && (
+                        <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded"
+                          style={{ background: '#FEF3C7', color: '#92400E' }}>{item.notes}</span>
+                      )}
+                    </div>
+                    <span className="ml-2 shrink-0 text-xs" style={{ color: '#9CA3AF' }}>
+                      {formatRupiah(item.price * item.quantity)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Footer ── */}
+          <div className="px-4 py-2.5 flex items-center gap-2"
+            style={{ borderTop: '1px solid #F3F4F6' }}>
+
+            <div className="flex items-center gap-1.5">
+              {order.status !== 'done' && order.status !== 'cancelled' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditOrder(order); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border transition"
+                  style={{ borderColor: '#E5E7EB', color: '#6B7280', background: 'transparent' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                  Edit
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onDirectPrint(order); }}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border transition"
+                style={{ borderColor: '#E5E7EB', background: 'transparent', color: '#9CA3AF' }}
+                title="Print Invoice"
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB'; e.currentTarget.style.color = '#374151'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9CA3AF'; }}>
+                <Printer size={13} />
+              </button>
+            </div>
+
+            <div className="flex-1 flex items-center justify-end gap-2">
+              {order.status === 'done' && (
+                <span className="text-xs font-medium" style={{ color: '#16A34A' }}>
+                  Selesai · {formatTime(order.updatedAt)}
+                </span>
+              )}
+              {order.status === 'cancelled' && (
+                <span className="text-xs" style={{ color: '#9CA3AF' }}>Dibatalkan</span>
+              )}
+              {order.status === 'pending' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                  disabled={isUpdating || animatingSuccess}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-40"
+                  style={{ color: '#EF4444', background: 'transparent' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#FEF2F2'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                  Batal
+                </button>
+              )}
+              {nextStatus && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleStatusUpdate(nextStatus); }}
+                  disabled={isUpdating || animatingSuccess}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition disabled:opacity-50 active:scale-95"
+                  style={{ background: animatingSuccess ? '#16A34A' : nextStatus === 'done' ? '#1B4332' : '#2563EB' }}>
+                  {animatingSuccess ? 'Berhasil' : nextStatus === 'done' ? 'Selesai' : 'Proses →'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tandai Lunas */}
+          {!order.isPaid && order.status !== 'cancelled' && (
+            <div className="px-4 pb-3">
+              <button
+                onClick={() => onOpenPayModal(order)}
+                className="w-full py-2 rounded-lg text-xs font-medium transition border"
+                style={{ borderColor: '#E5E7EB', color: '#6B7280', background: 'transparent' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#FFFBEB'; e.currentTarget.style.borderColor = '#FCD34D'; e.currentTarget.style.color = '#92400E'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#6B7280'; }}>
+                Tandai Lunas
+              </button>
+            </div>
+          )}
+
         </div>
-
-        {/* Tandai Lunas — row terpisah jika belum bayar */}
-        {!order.isPaid && order.status !== 'cancelled' && (
-          <div className="px-4 pb-3">
-            <button
-              onClick={() => onOpenPayModal(order)}
-              className="w-full py-2.5 rounded-xl font-bold text-sm transition border-2"
-              style={{ borderColor: '#F59E0B', color: '#92400E', background: '#FFFBEB' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#FEF3C7'}
-              onMouseLeave={(e) => e.currentTarget.style.background = '#FFFBEB'}>
-              💰 Tandai Lunas
-            </button>
-          </div>
-        )}
-
       </div>
-
     </div>
   );
 }
@@ -1024,11 +1068,11 @@ function CancelConfirmModal({ order, onConfirm, onClose }) {
             style={{ background: '#FEE2E2' }}>
             🗑️
           </div>
-          <h3 className="text-lg font-bold text-center" style={{ color: '#1C1C1A' }}>
+          <h3 className="text-lg font-bold text-center" style={{ color: '#1A1A1A' }}>
             Batalkan Order?
           </h3>
-          <p className="text-sm text-center mt-2" style={{ color: '#6B7560' }}>
-            Order <span className="font-bold" style={{ color: '#1C1C1A' }}>#{order.dailyNumber || order.id}</span> dari{' '}
+          <p className="text-sm text-center mt-2" style={{ color: '#6B7280' }}>
+            Order <span className="font-bold" style={{ color: '#1A1A1A' }}>#{order.dailyNumber || order.id}</span> dari{' '}
             <span className="font-semibold">Meja {order.table?.number}</span> akan dibatalkan.
           </p>
           <p className="text-xs text-center mt-1.5 font-medium" style={{ color: '#DC2626' }}>
@@ -1039,7 +1083,7 @@ function CancelConfirmModal({ order, onConfirm, onClose }) {
           <p className="font-semibold mb-1" style={{ color: '#DC2626' }}>
             {order.items?.length} item · {formatRupiah(order.totalAmount)}
           </p>
-          <p className="text-xs" style={{ color: '#9CA38F' }}>
+          <p className="text-xs" style={{ color: '#9CA3AF' }}>
             {order.items?.slice(0, 3).map((i) => `${i.quantity}× ${i.menuName || i.menu?.name}`).join(', ')}
             {(order.items?.length || 0) > 3 ? ` +${order.items.length - 3} lainnya` : ''}
           </p>
@@ -1048,9 +1092,9 @@ function CancelConfirmModal({ order, onConfirm, onClose }) {
           <button
             onClick={onClose}
             className="flex-1 py-3 rounded-xl font-semibold text-sm border transition"
-            style={{ borderColor: '#E8ECE4', color: '#6B7560', background: '#F7F7F5' }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#EDF1EA'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#F7F7F5'}>
+            style={{ borderColor: '#E8ECE4', color: '#6B7280', background: '#F5EFE6' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#D8F3DC'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#F5EFE6'}>
             Kembali
           </button>
           <button
@@ -1102,17 +1146,17 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
         {/* Header */}
         <div className="px-4 pt-3 pb-3 border-b flex items-center justify-between" style={{ borderColor: '#E8ECE4' }}>
           <div>
-            <p className="font-bold text-sm" style={{ color: '#1C1C1A' }}>💰 Tandai Lunas — Order #{order.dailyNumber || order.id}</p>
-            {order.customerName && <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>👤 {order.customerName}</p>}
+            <p className="font-bold text-sm" style={{ color: '#1A1A1A' }}>💰 Tandai Lunas — Order #{order.dailyNumber || order.id}</p>
+            {order.customerName && <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>👤 {order.customerName}</p>}
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm" style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm" style={{ background: '#F5EFE6', color: '#6B7280' }}>✕</button>
         </div>
 
         <div className="px-4 py-4 space-y-3 overflow-y-auto" style={{ maxHeight: '80vh' }}>
           {/* Total */}
-          <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#EDF1EA' }}>
-            <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Total Tagihan</p>
-            <p className="text-xl font-bold" style={{ color: '#658051' }}>{fmt(order.totalAmount)}</p>
+          <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#D8F3DC' }}>
+            <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>Total Tagihan</p>
+            <p className="text-xl font-bold" style={{ color: '#1B4332' }}>{fmt(order.totalAmount)}</p>
           </div>
 
           {/* Metode */}
@@ -1121,8 +1165,8 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
               <button key={o.v} onClick={() => { setMethod(o.v); setReceivedRaw(''); }}
                 className="py-2.5 rounded-xl border-2 font-bold text-sm transition"
                 style={method === o.v
-                  ? { borderColor: '#658051', background: '#EDF1EA', color: '#658051' }
-                  : { borderColor: '#E8ECE4', background: '#FAFAF8', color: '#1C1C1A' }}>
+                  ? { borderColor: '#1B4332', background: '#D8F3DC', color: '#1B4332' }
+                  : { borderColor: '#E8ECE4', background: '#FAFAF8', color: '#1A1A1A' }}>
                 {o.l}
               </button>
             ))}
@@ -1131,13 +1175,13 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
           {method === 'cash' && (
             <div className="space-y-3">
               {/* Display */}
-              <div className="rounded-2xl px-4 py-3 border-2" style={{ borderColor: received > 0 ? (change >= 0 ? '#658051' : '#DC2626') : '#E8ECE4', background: '#FAFAF8' }}>
-                <p className="text-xs font-semibold mb-0.5" style={{ color: '#9CA38F' }}>Uang Diterima</p>
-                <p className="text-2xl font-bold" style={{ color: received > 0 ? (change >= 0 ? '#658051' : '#DC2626') : '#C8CCBE' }}>
+              <div className="rounded-2xl px-4 py-3 border-2" style={{ borderColor: received > 0 ? (change >= 0 ? '#1B4332' : '#DC2626') : '#E8ECE4', background: '#FAFAF8' }}>
+                <p className="text-xs font-semibold mb-0.5" style={{ color: '#9CA3AF' }}>Uang Diterima</p>
+                <p className="text-2xl font-bold" style={{ color: received > 0 ? (change >= 0 ? '#1B4332' : '#DC2626') : '#C8CCBE' }}>
                   {received > 0 ? fmt(received) : 'Rp —'}
                 </p>
                 {received > 0 && (
-                  <p className="text-xs font-semibold mt-0.5" style={{ color: change >= 0 ? '#658051' : '#DC2626' }}>
+                  <p className="text-xs font-semibold mt-0.5" style={{ color: change >= 0 ? '#1B4332' : '#DC2626' }}>
                     {change >= 0 ? `✅ Kembalian ${fmt(change)}` : `⚠️ Kurang ${fmt(Math.abs(change))}`}
                   </p>
                 )}
@@ -1148,8 +1192,8 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
                   <button key={k} onClick={() => padPress(k)}
                     className="rounded-2xl font-bold flex items-center justify-center select-none"
                     style={{ height:'3rem', fontSize:'1.1rem',
-                      background: k==='⌫' ? '#FEF2F2' : k==='C' ? '#F7F7F5' : '#FAFAF8',
-                      color: k==='⌫' ? '#DC2626' : k==='C' ? '#6B7560' : '#1C1C1A',
+                      background: k==='⌫' ? '#FEF2F2' : k==='C' ? '#F5EFE6' : '#FAFAF8',
+                      color: k==='⌫' ? '#DC2626' : k==='C' ? '#6B7280' : '#1A1A1A',
                       border: `1.5px solid ${k==='⌫' ? '#FECACA' : '#E8ECE4'}` }}
                     onMouseDown={(e) => e.currentTarget.style.transform='scale(0.93)'}
                     onMouseUp={(e) => e.currentTarget.style.transform='scale(1)'}
@@ -1162,7 +1206,7 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
                 {['00','000'].map((k) => (
                   <button key={k} onClick={() => padPress(k)}
                     className="rounded-2xl font-bold flex items-center justify-center select-none"
-                    style={{ height:'3rem', fontSize:'1.1rem', background:'#FAFAF8', border:'1.5px solid #E8ECE4', color:'#1C1C1A' }}
+                    style={{ height:'3rem', fontSize:'1.1rem', background:'#FAFAF8', border:'1.5px solid #E8ECE4', color:'#1A1A1A' }}
                     onMouseDown={(e) => e.currentTarget.style.transform='scale(0.93)'}
                     onMouseUp={(e) => e.currentTarget.style.transform='scale(1)'}
                     onMouseLeave={(e) => e.currentTarget.style.transform='scale(1)'}>
@@ -1176,20 +1220,20 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
           {method === 'qris' && (
             <div className="rounded-2xl p-4 text-center border-2 border-dashed" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
               <p className="text-3xl mb-2">📱</p>
-              <p className="text-sm font-bold" style={{ color: '#1C1C1A' }}>Perlihatkan QRIS ke customer</p>
-              <p className="text-xs mt-1" style={{ color: '#9CA38F' }}>Setelah dibayar, tekan konfirmasi</p>
+              <p className="text-sm font-bold" style={{ color: '#1A1A1A' }}>Perlihatkan QRIS ke customer</p>
+              <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Setelah dibayar, tekan konfirmasi</p>
             </div>
           )}
 
           <div className="space-y-2 pt-1">
             <button onClick={handleConfirm} disabled={!canSubmit || isPending}
               className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition disabled:opacity-40"
-              style={{ background: '#658051' }}>
+              style={{ background: '#1B4332' }}>
               {isPending ? '⏳ Menyimpan...' : method === 'cash' ? (canSubmit ? `✅ Lunas · Kembalian ${fmt(change)}` : 'Masukkan jumlah uang') : '✅ Konfirmasi Lunas QRIS'}
             </button>
             <button onClick={onClose}
               className="w-full py-2.5 rounded-xl text-sm font-medium border"
-              style={{ borderColor: '#E8ECE4', color: '#6B7560' }}>
+              style={{ borderColor: '#E8ECE4', color: '#6B7280' }}>
               Batal
             </button>
           </div>
@@ -1329,47 +1373,47 @@ function InvoiceModal({ order, onClose }) {
         <div className="px-5 pt-3 pb-4 border-b shrink-0 flex items-center justify-between"
           style={{ borderColor: '#E8ECE4' }}>
           <div>
-            <p className="font-bold text-base" style={{ color: '#1C1C1A' }}>🧾 Invoice #{order.dailyNumber || order.id}</p>
-            <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>{formatDateTime(order.createdAt)}</p>
+            <p className="font-bold text-base" style={{ color: '#1A1A1A' }}>🧾 Invoice #{order.dailyNumber || order.id}</p>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>{formatDateTime(order.createdAt)}</p>
           </div>
           <button onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
-            style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+            style={{ background: '#F5EFE6', color: '#6B7280' }}>✕</button>
         </div>
 
         {/* Body invoice */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
           {/* Info order */}
-          <div className="rounded-2xl p-4 space-y-2" style={{ background: '#F7F7F5' }}>
+          <div className="rounded-2xl p-4 space-y-2" style={{ background: '#F5EFE6' }}>
             <div className="grid grid-cols-2 gap-y-2 text-sm">
               <div>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>Meja</p>
-                <p className="font-semibold" style={{ color: '#1C1C1A' }}>
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>Meja</p>
+                <p className="font-semibold" style={{ color: '#1A1A1A' }}>
                   Meja {order.table?.number} · {floorLabel(order.table?.floor)}
                 </p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>Tipe</p>
-                <p className="font-semibold" style={{ color: '#1C1C1A' }}>
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>Tipe</p>
+                <p className="font-semibold" style={{ color: '#1A1A1A' }}>
                   {order.orderType === 'dine-in' ? '🪑 Dine In' : '🥡 Take Away'}
                 </p>
               </div>
               {order.customerName && (
                 <div className="col-span-2">
-                  <p className="text-xs" style={{ color: '#9CA38F' }}>Customer</p>
-                  <p className="font-semibold" style={{ color: '#1C1C1A' }}>👤 {order.customerName}</p>
+                  <p className="text-xs" style={{ color: '#9CA3AF' }}>Customer</p>
+                  <p className="font-semibold" style={{ color: '#1A1A1A' }}>👤 {order.customerName}</p>
                 </div>
               )}
               <div>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>Status Order</p>
-                <p className="font-semibold" style={{ color: '#1C1C1A' }}>
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>Status Order</p>
+                <p className="font-semibold" style={{ color: '#1A1A1A' }}>
                   {STATUS_CONFIG[order.status]?.label || order.status}
                 </p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>Pembayaran</p>
-                <p className="font-semibold" style={{ color: order.isPaid ? '#658051' : '#D97706' }}>
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>Pembayaran</p>
+                <p className="font-semibold" style={{ color: order.isPaid ? '#1B4332' : '#D97706' }}>
                   {order.isPaid ? '✅ Lunas' : '⏳ Belum Bayar'}
                 </p>
               </div>
@@ -1379,7 +1423,7 @@ function InvoiceModal({ order, onClose }) {
           {/* Divider label */}
           <div className="flex items-center gap-2">
             <div className="flex-1 h-px" style={{ background: '#E8ECE4' }} />
-            <p className="text-xs font-semibold px-2" style={{ color: '#9CA38F' }}>Detail Pesanan</p>
+            <p className="text-xs font-semibold px-2" style={{ color: '#9CA3AF' }}>Detail Pesanan</p>
             <div className="flex-1 h-px" style={{ background: '#E8ECE4' }} />
           </div>
 
@@ -1388,15 +1432,15 @@ function InvoiceModal({ order, onClose }) {
             {order.items?.map((item) => (
               <div key={item.id} className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium" style={{ color: '#1C1C1A' }}>
+                  <p className="text-sm font-medium" style={{ color: '#1A1A1A' }}>
                     {item.menuName || item.menu?.name}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>
+                  <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
                     {item.quantity} × {fmt(item.price)}
                     {item.notes && ` · ${item.notes}`}
                   </p>
                 </div>
-                <p className="text-sm font-semibold ml-3 shrink-0" style={{ color: '#1C1C1A' }}>
+                <p className="text-sm font-semibold ml-3 shrink-0" style={{ color: '#1A1A1A' }}>
                   {fmt(item.price * item.quantity)}
                 </p>
               </div>
@@ -1405,9 +1449,9 @@ function InvoiceModal({ order, onClose }) {
 
           {/* Total */}
           <div className="rounded-2xl px-4 py-3 flex items-center justify-between"
-            style={{ background: '#EDF1EA', border: '1.5px solid #c8d8c0' }}>
-            <p className="font-bold text-sm" style={{ color: '#658051' }}>Total</p>
-            <p className="text-xl font-bold" style={{ color: '#658051' }}>{fmt(order.totalAmount)}</p>
+            style={{ background: '#D8F3DC', border: '1.5px solid #c8d8c0' }}>
+            <p className="font-bold text-sm" style={{ color: '#1B4332' }}>Total</p>
+            <p className="text-xl font-bold" style={{ color: '#1B4332' }}>{fmt(order.totalAmount)}</p>
           </div>
 
           {/* Catatan */}
@@ -1424,8 +1468,8 @@ function InvoiceModal({ order, onClose }) {
 
           {/* Footer struk */}
           <div className="text-center py-2 border-t border-dashed" style={{ borderColor: '#E8ECE4' }}>
-            <p className="text-xs font-semibold" style={{ color: '#658051' }}>☕ Carra Coffee</p>
-            <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>Terima kasih telah berkunjung!</p>
+            <p className="text-xs font-semibold" style={{ color: '#1B4332' }}>☕ Carra Coffee</p>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Terima kasih telah berkunjung!</p>
           </div>
         </div>
 
@@ -1433,15 +1477,15 @@ function InvoiceModal({ order, onClose }) {
         <div className="px-5 pb-5 pt-3 space-y-2 shrink-0 border-t" style={{ borderColor: '#E8ECE4' }}>
           <button onClick={handlePrint}
             className="w-full py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition"
-            style={{ background: '#1C1C1A' }}
+            style={{ background: '#1A1A1A' }}
             onMouseEnter={(e) => e.currentTarget.style.background = '#374151'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#1C1C1A'}>
+            onMouseLeave={(e) => e.currentTarget.style.background = '#1A1A1A'}>
             🖨️ Print Invoice
           </button>
           <button onClick={onClose}
             className="w-full py-2.5 rounded-xl text-sm font-medium border transition"
-            style={{ borderColor: '#E8ECE4', color: '#6B7560' }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#F7F7F5'}
+            style={{ borderColor: '#E8ECE4', color: '#6B7280' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#F5EFE6'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
             Tutup
           </button>
@@ -1454,8 +1498,8 @@ function InvoiceModal({ order, onClose }) {
 // ─── Loading saat cek auth ────────────────────────────
 function LoadingAuth() {
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F7F7F5' }}>
-      <div className="text-center" style={{ color: '#9CA38F' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F5EFE6' }}>
+      <div className="text-center" style={{ color: '#9CA3AF' }}>
         <div className="text-4xl mb-3 animate-pulse">🔐</div>
         <p>Memeriksa sesi login...</p>
       </div>
@@ -1546,32 +1590,32 @@ function EditOrderModal({ order, onClose, onSaved }) {
         {/* Header */}
         <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: '#E8ECE4' }}>
           <div>
-            <h2 className="font-bold text-lg" style={{ color: '#1C1C1A' }}>✏️ Edit Order #{order.dailyNumber || order.id}</h2>
-            <p className="text-xs mt-0.5" style={{ color: '#9CA38F' }}>Meja {order.table?.number} · {floorLabel(order.table?.floor)}</p>
+            <h2 className="font-bold text-lg" style={{ color: '#1A1A1A' }}>✏️ Edit Order #{order.dailyNumber || order.id}</h2>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Meja {order.table?.number} · {floorLabel(order.table?.floor)}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
-            style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+            style={{ background: '#F5EFE6', color: '#6B7280' }}>✕</button>
         </div>
 
         <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
 
-          {/* LEFT: Tambah menu */}
-          <div className="flex flex-col sm:w-1/2 border-b sm:border-b-0 sm:border-r" style={{ borderColor: '#E8ECE4', maxHeight: '40vh', minHeight: '40vh' }}>
+          {/* LEFT: Tambah menu — fill remaining height */}
+          <div className="flex flex-col sm:w-1/2 border-b sm:border-b-0 sm:border-r min-h-0 flex-1 sm:flex-none" style={{ borderColor: '#E8ECE4' }}>
             <div className="px-4 py-3 space-y-2 shrink-0 border-b" style={{ borderColor: '#E8ECE4' }}>
-              <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Tambah Item</p>
+              <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>Tambah Item</p>
               <input type="text" placeholder="Cari menu..." value={search} onChange={(e) => setSearch(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl text-sm outline-none border"
                 style={{ border: '1px solid #E8ECE4', background: '#FAFAF8' }} />
               <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
                 <button onClick={() => setCategory('semua')}
                   className="px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap shrink-0"
-                  style={activeCategory === 'semua' ? { background: '#658051', color: '#fff' } : { background: '#F7F7F5', color: '#6B7560' }}>
+                  style={activeCategory === 'semua' ? { background: '#1B4332', color: '#fff' } : { background: '#F5EFE6', color: '#6B7280' }}>
                   Semua
                 </button>
                 {filteredCategories.map((cat) => (
                   <button key={cat.slug} onClick={() => setCategory(cat.slug)}
                     className="px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap shrink-0"
-                    style={activeCategory === cat.slug ? { background: '#658051', color: '#fff' } : { background: '#F7F7F5', color: '#6B7560' }}>
+                    style={activeCategory === cat.slug ? { background: '#1B4332', color: '#fff' } : { background: '#F5EFE6', color: '#6B7280' }}>
                     {cat.emoji} {cat.label}
                   </button>
                 ))}
@@ -1579,23 +1623,17 @@ function EditOrderModal({ order, onClose, onSaved }) {
             </div>
             <div className="overflow-y-auto flex-1">
               {filteredMenu.map((item) => (
-                <button key={item.id} onClick={() => {
-                    if (item.hasTemperatureOption || item.hasAdditionalEspresso) {
-                      setAddModal(item);
-                    } else {
-                      handleAddItem(item, {});
-                    }
-                  }}
+                <button key={item.id} onClick={() => setAddModal(item)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left border-b transition"
                   style={{ borderColor: '#F3F4F6' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#F7F7F5'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#F5EFE6'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                   <span className="text-lg shrink-0">{getCatEmoji(item.category)}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.name}</p>
-                    <p className="text-xs" style={{ color: '#658051' }}>{fmt(item.price)}</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1A1A1A' }}>{item.name}</p>
+                    <p className="text-xs" style={{ color: '#1B4332' }}>{fmt(item.price)}</p>
                   </div>
-                  <span className="text-xs font-bold shrink-0" style={{ color: '#658051' }}>+ Tambah</span>
+                  <span className="text-xs font-bold shrink-0" style={{ color: '#1B4332' }}>+ Tambah</span>
                 </button>
               ))}
             </div>
@@ -1604,16 +1642,16 @@ function EditOrderModal({ order, onClose, onSaved }) {
           {/* RIGHT: Cart items */}
           <div className="flex flex-col sm:w-1/2 min-h-0">
             <div className="px-4 py-3 shrink-0 border-b" style={{ borderColor: '#E8ECE4' }}>
-              <p className="text-xs font-semibold" style={{ color: '#6B7560' }}>Item Saat Ini ({cart.length})</p>
+              <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>Item Saat Ini ({cart.length})</p>
             </div>
             <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
               {cart.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: '#9CA38F' }}>Tidak ada item</p>
+                <p className="text-sm text-center py-8" style={{ color: '#9CA3AF' }}>Tidak ada item</p>
               ) : cart.map((item, idx) => (
                 <div key={idx} className="flex items-start gap-3 p-3 rounded-xl border" style={{ background: '#FAFAF8', borderColor: '#E8ECE4' }}>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: '#1C1C1A' }}>{item.menuName}</p>
-                    <p className="text-xs" style={{ color: '#658051' }}>{fmt(item.price)}/pcs</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: '#1A1A1A' }}>{item.menuName}</p>
+                    <p className="text-xs" style={{ color: '#1B4332' }}>{fmt(item.price)}/pcs</p>
                     {item.notes && (
                       <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block" style={{ background: '#FEF3C7', color: '#92400E' }}>
                         {item.notes}
@@ -1624,10 +1662,10 @@ function EditOrderModal({ order, onClose, onSaved }) {
                     <button onClick={() => changeQty(idx, -1)}
                       className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center"
                       style={{ background: '#FEE2E2', color: '#DC2626' }}>−</button>
-                    <span className="text-sm font-bold w-5 text-center" style={{ color: '#1C1C1A' }}>{item.quantity}</span>
+                    <span className="text-sm font-bold w-5 text-center" style={{ color: '#1A1A1A' }}>{item.quantity}</span>
                     <button onClick={() => changeQty(idx, 1)}
                       className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center text-white"
-                      style={{ background: '#658051' }}>+</button>
+                      style={{ background: '#1B4332' }}>+</button>
                     <button onClick={() => removeItem(idx)}
                       className="w-7 h-7 rounded-lg text-sm font-bold flex items-center justify-center ml-1"
                       style={{ background: '#FEE2E2', color: '#DC2626' }} title="Hapus item">✕</button>
@@ -1639,14 +1677,14 @@ function EditOrderModal({ order, onClose, onSaved }) {
             {/* Footer */}
             <div className="px-4 py-4 border-t space-y-2 shrink-0" style={{ borderColor: '#E8ECE4' }}>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold" style={{ color: '#6B7560' }}>Total Baru</span>
-                <span className="text-lg font-bold" style={{ color: '#658051' }}>{fmt(totalAmount)}</span>
+                <span className="text-sm font-semibold" style={{ color: '#6B7280' }}>Total Baru</span>
+                <span className="text-lg font-bold" style={{ color: '#1B4332' }}>{fmt(totalAmount)}</span>
               </div>
               <button onClick={handleSave} disabled={editMutation.isPending || cart.length === 0}
                 className="w-full py-3 rounded-xl font-bold text-sm text-white transition disabled:opacity-50"
-                style={{ background: '#658051' }}
-                onMouseEnter={(e) => { if (!editMutation.isPending) e.currentTarget.style.background = '#4d6340'; }}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#658051'}>
+                style={{ background: '#1B4332' }}
+                onMouseEnter={(e) => { if (!editMutation.isPending) e.currentTarget.style.background = '#2D6A4F'; }}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#1B4332'}>
                 {editMutation.isPending ? '⏳ Menyimpan...' : '✅ Simpan Perubahan'}
               </button>
             </div>
@@ -1698,21 +1736,21 @@ function EditAddItemModal({ item, onConfirm, onClose }) {
         <div className="overflow-y-auto px-5 pb-2 pt-2 flex-1">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-base" style={{ color: '#1C1C1A' }}>{item.name}</h3>
-              <p className="text-sm font-semibold" style={{ color: '#658051' }}>{fmt(item.price)}</p>
+              <h3 className="font-bold text-base" style={{ color: '#1A1A1A' }}>{item.name}</h3>
+              <p className="text-sm font-semibold" style={{ color: '#1B4332' }}>{fmt(item.price)}</p>
             </div>
             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm"
-              style={{ background: '#F7F7F5', color: '#6B7560' }}>✕</button>
+              style={{ background: '#F5EFE6', color: '#6B7280' }}>✕</button>
           </div>
 
           {item.hasTemperatureOption && (
             <div className="mb-4">
-              <p className="text-sm font-semibold mb-2" style={{ color: '#1C1C1A' }}>Pilih Suhu <span style={{ color: '#E84040' }}>*</span></p>
+              <p className="text-sm font-semibold mb-2" style={{ color: '#1A1A1A' }}>Pilih Suhu <span style={{ color: '#E84040' }}>*</span></p>
               <div className="grid grid-cols-2 gap-2">
                 {[{ v: 'Ice', e: '🧊', ac: '#2563EB', ab: '#EFF6FF', ab2: '#93C5FD' }, { v: 'Hot', e: '♨️', ac: '#DC2626', ab: '#FEF2F2', ab2: '#FCA5A5' }].map((opt) => (
                   <button key={opt.v} onClick={() => handleTempSelect(opt.v)}
                     className="flex flex-col items-center gap-1 py-3 rounded-2xl border-2 transition"
-                    style={{ borderColor: temp === opt.v ? opt.ab2 : '#E8ECE4', background: temp === opt.v ? opt.ab : '#FAFAF8', color: temp === opt.v ? opt.ac : '#6B7560' }}>
+                    style={{ borderColor: temp === opt.v ? opt.ab2 : '#E8ECE4', background: temp === opt.v ? opt.ab : '#FAFAF8', color: temp === opt.v ? opt.ac : '#6B7280' }}>
                     <span className="text-2xl">{opt.e}</span>
                     <span className="font-bold text-sm">{opt.v}</span>
                   </button>
@@ -1724,23 +1762,23 @@ function EditAddItemModal({ item, onConfirm, onClose }) {
           {item.hasAdditionalEspresso && (
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold" style={{ color: '#1C1C1A' }}>Espresso Shot</p>
-                <p className="text-xs" style={{ color: '#9CA38F' }}>+{fmt(item.additionalEspressoPrice || 3000)}/shot</p>
+                <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Espresso Shot</p>
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>+{fmt(item.additionalEspressoPrice || 3000)}/shot</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setEspresso((s) => Math.max(0, s - 1))} disabled={espresso === 0}
                   className="w-8 h-8 rounded-xl border-2 font-bold flex items-center justify-center disabled:opacity-30"
-                  style={{ borderColor: '#E8ECE4', color: '#658051' }}>−</button>
-                <span className="w-6 text-center font-bold" style={{ color: '#1C1C1A' }}>{espresso}</span>
+                  style={{ borderColor: '#E8ECE4', color: '#1B4332' }}>−</button>
+                <span className="w-6 text-center font-bold" style={{ color: '#1A1A1A' }}>{espresso}</span>
                 <button onClick={() => setEspresso((s) => Math.min(10, s + 1))}
                   className="w-8 h-8 rounded-xl border-2 font-bold flex items-center justify-center"
-                  style={{ borderColor: '#658051', background: '#EDF1EA', color: '#658051' }}>+</button>
+                  style={{ borderColor: '#1B4332', background: '#D8F3DC', color: '#1B4332' }}>+</button>
               </div>
             </div>
           )}
 
           <div className="mb-2">
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1C1C1A' }}>Catatan</p>
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1A1A1A' }}>Catatan</p>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {quickNotes.map((chip) => {
                 const active = chips.includes(chip);
@@ -1749,8 +1787,8 @@ function EditAddItemModal({ item, onConfirm, onClose }) {
                   <button key={chip} onClick={() => toggleChip(chip)} disabled={disabled}
                     className="px-3 py-1 rounded-full text-xs font-semibold border-2 transition"
                     style={disabled ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', textDecoration: 'line-through' }
-                      : active ? { background: '#EDF1EA', color: '#658051', borderColor: '#658051' }
-                      : { background: '#FAFAF8', color: '#6B7560', borderColor: '#E8ECE4' }}>
+                      : active ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
+                      : { background: '#FAFAF8', color: '#6B7280', borderColor: '#E8ECE4' }}>
                     {active ? `✓ ${chip}` : `+ ${chip}`}
                   </button>
                 );
@@ -1765,7 +1803,7 @@ function EditAddItemModal({ item, onConfirm, onClose }) {
           <button onClick={() => onConfirm({ temperature: temp === 'none' ? '' : temp, additionalEspressoShots: espresso, additionalEspressoPrice: item.additionalEspressoPrice || 3000, notes })}
             disabled={!canConfirm}
             className="w-full py-3 rounded-2xl font-bold text-sm text-white disabled:opacity-40"
-            style={{ background: '#658051' }}>
+            style={{ background: '#1B4332' }}>
             {item.hasTemperatureOption && !temp ? 'Pilih suhu dulu' : 'Tambah ke Pesanan'}
           </button>
         </div>

@@ -1,8 +1,8 @@
 'use client';
-// app/admin/laporan/page.js
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CurrencyCircleDollar, Receipt, ForkKnife, Clock, DownloadSimple } from '@phosphor-icons/react';
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -99,32 +99,33 @@ export default function LaporanPage() {
     : null;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" style={{ background: '#F5EFE6', minHeight: '100vh' }}>
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800">📊 Laporan Penjualan</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-xl font-semibold" style={{ color: '#1A1A1A' }}>Laporan Penjualan</h1>
+        <p className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
           Data hari ini · {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
       </div>
 
       {/* Export Card */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
+      <div className="bg-white rounded-2xl border p-5" style={{ borderColor: '#E8ECE4', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <h2 className="font-bold text-gray-800 mb-1">📥 Export Laporan</h2>
-            <p className="text-xs text-gray-400">Download data order ke file CSV (bisa dibuka di Excel)</p>
+            <h2 className="font-medium text-sm mb-0.5" style={{ color: '#1A1A1A' }}>Export Laporan</h2>
+            <p className="text-xs" style={{ color: '#9CA3AF' }}>Download data order ke file CSV</p>
           </div>
 
-          {/* Preset buttons */}
-          <div className="flex gap-1.5 flex-wrap">
+          {/* Preset segmented control */}
+          <div className="flex items-center p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
             {[
-              { label: 'Hari ini',    days: 1 },
-              { label: '7 hari',      days: 7 },
-              { label: '30 hari',     days: 30 },
+              { label: 'Hari ini', days: 1 },
+              { label: '7 hari',   days: 7 },
+              { label: '30 hari',  days: 30 },
             ].map((p) => (
               <button key={p.days} onClick={() => setPreset(p.days)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
+                style={{ color: '#6B7280', fontWeight: 400 }}>
                 {p.label}
               </button>
             ))}
@@ -133,35 +134,38 @@ export default function LaporanPage() {
           {/* Date range */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500 shrink-0">Dari</label>
+              <label className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>Dari</label>
               <input
                 type="date"
                 value={exportStart}
                 max={exportEnd}
                 onChange={(e) => setExportStart(e.target.value)}
-                className="border rounded-xl px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                className="border rounded-xl px-3 py-1.5 text-sm outline-none transition"
+                style={{ borderColor: '#E8ECE4', color: '#1A1A1A', background: '#FAFAFA' }}
               />
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500 shrink-0">s/d</label>
+              <label className="text-xs shrink-0" style={{ color: '#9CA3AF' }}>s/d</label>
               <input
                 type="date"
                 value={exportEnd}
                 min={exportStart}
                 max={toDateInput(today)}
                 onChange={(e) => setExportEnd(e.target.value)}
-                className="border rounded-xl px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                className="border rounded-xl px-3 py-1.5 text-sm outline-none transition"
+                style={{ borderColor: '#E8ECE4', color: '#1A1A1A', background: '#FAFAFA' }}
               />
             </div>
             <button
               onClick={handleExport}
               disabled={exporting}
-              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl font-semibold text-sm transition disabled:opacity-50"
+              className="flex items-center gap-1.5 text-white px-4 py-2 rounded-xl text-sm transition disabled:opacity-50"
+              style={{ background: '#E76F00', fontWeight: 500 }}
             >
               {exporting ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Mengekspor...</>
+                <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Mengekspor...</>
               ) : (
-                <>⬇️ Download CSV</>
+                <><DownloadSimple size={14} weight="bold" /> Download CSV</>
               )}
             </button>
           </div>
@@ -171,25 +175,25 @@ export default function LaporanPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
-          icon="💰" label="Pendapatan Hari Ini"
+          Icon={CurrencyCircleDollar} label="Pendapatan Hari Ini"
           value={loadingSummary ? '...' : formatRupiah(summary?.revenue || 0)}
           sub={`${summary?.doneOrders || 0} order selesai`}
           color="green"
         />
         <KpiCard
-          icon="🧾" label="Total Order"
+          Icon={Receipt} label="Total Order"
           value={loadingSummary ? '...' : summary?.totalOrders || 0}
           sub={`${summary?.pendingOrders || 0} masih aktif`}
           color="orange"
         />
         <KpiCard
-          icon="🍽️" label="Item Terjual"
+          Icon={ForkKnife} label="Item Terjual"
           value={loadingSummary ? '...' : summary?.totalItems || 0}
           sub="pcs hari ini"
           color="blue"
         />
         <KpiCard
-          icon="⏰" label="Jam Tersibuk"
+          Icon={Clock} label="Jam Tersibuk"
           value={loadingHourly || !peakHour ? '...' : peakHour.hour}
           sub={peakHour ? `${peakHour.orders} order` : '-'}
           color="purple"
@@ -248,12 +252,14 @@ export default function LaporanPage() {
             <h2 className="font-bold text-gray-800">Pendapatan Harian</h2>
             <p className="text-xs text-gray-400 mt-0.5">Total omzet per hari (order selesai)</p>
           </div>
-          <div className="flex gap-1.5 bg-gray-100 rounded-xl p-1">
+          <div className="flex items-center p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
             {[7, 30].map((r) => (
               <button key={r} onClick={() => setChartRange(r)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  chartRange === r ? 'bg-white shadow text-orange-500' : 'text-gray-500 hover:text-gray-700'
-                }`}>
+                className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
+                style={chartRange === r
+                  ? { background: '#FFFFFF', color: '#1A1A1A', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
+                  : { color: '#6B7280', fontWeight: 400 }
+                }>
                 {r} hari
               </button>
             ))}
@@ -465,27 +471,22 @@ export default function LaporanPage() {
 }
 
 // ─── KPI Card ─────────────────────────────────────────
-function KpiCard({ icon, label, value, sub, color }) {
-  const colors = {
-    green:  'bg-green-50  border-green-100',
-    orange: 'bg-orange-50 border-orange-100',
-    blue:   'bg-blue-50   border-blue-100',
-    purple: 'bg-purple-50 border-purple-100',
+function KpiCard({ Icon, label, value, sub, color }) {
+  const palettes = {
+    green:  { bg: '#F0FFF4', border: '#BBF7D0', text: '#16A34A', iconColor: '#22C55E' },
+    orange: { bg: '#FFF7ED', border: '#FED7AA', text: '#EA580C', iconColor: '#F97316' },
+    blue:   { bg: '#EFF6FF', border: '#BFDBFE', text: '#2563EB', iconColor: '#3B82F6' },
+    purple: { bg: '#FAF5FF', border: '#E9D5FF', text: '#7C3AED', iconColor: '#A855F7' },
   };
-  const textColors = {
-    green:  'text-green-600',
-    orange: 'text-orange-500',
-    blue:   'text-blue-500',
-    purple: 'text-purple-500',
-  };
+  const p = palettes[color] || palettes.green;
   return (
-    <div className={`rounded-2xl border p-4 ${colors[color]}`}>
+    <div className="rounded-2xl p-4" style={{ background: p.bg, border: `1px solid ${p.border}` }}>
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">{icon}</span>
-        <span className="text-xs text-gray-500 font-medium">{label}</span>
+        {Icon && <Icon size={16} weight="duotone" style={{ color: p.iconColor, flexShrink: 0 }} />}
+        <span className="text-xs font-medium" style={{ color: '#6B7280' }}>{label}</span>
       </div>
-      <p className={`text-2xl font-black ${textColors[color]}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+      <p className="text-2xl font-bold" style={{ color: p.text }}>{value}</p>
+      <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>{sub}</p>
     </div>
   );
 }

@@ -1,18 +1,18 @@
-import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata = {
   title: "Carra Coffee",
   description: "Order langsung dari meja · Staff dashboard Carra Coffee",
   manifest: "/manifest.json",
-  themeColor: "#658051",
+  themeColor: "#1B4332",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -34,11 +34,11 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Carra Coffee" />
-        <meta name="theme-color" content="#658051" />
+        <meta name="theme-color" content="#1B4332" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className={`${geistSans.variable} antialiased`}>
+      <body className={`${inter.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>
