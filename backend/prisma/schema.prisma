@@ -60,7 +60,7 @@ model Order {
   notes        String?     // catatan tambahan dari customer
   customerName String?     // nama customer, opsional (diisi kasir)
   isPaid         Boolean     @default(false)  // false = belum bayar, true = sudah lunas
-  paymentMethod  String      @default("cash")  // "cash" | "qris"
+  paymentMethod  String      @default("cash")  // "cash" | "qris" | "split"
   createdAt      DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   items        OrderItem[]

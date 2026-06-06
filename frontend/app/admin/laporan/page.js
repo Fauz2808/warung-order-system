@@ -234,12 +234,26 @@ export default function LaporanPage() {
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">{summary?.qrisOrders || 0} transaksi</p>
               </div>
+              {/* Split */}
+              {(summary?.splitOrders || 0) > 0 && (
+                <div className="rounded-2xl border p-4 bg-orange-50 border-orange-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">✂️</span>
+                    <span className="text-xs text-gray-500 font-medium">Split</span>
+                  </div>
+                  <p className="text-xl font-black text-orange-600">
+                    {formatRupiah(summary?.splitRevenue || 0)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">{summary?.splitOrders || 0} transaksi</p>
+                </div>
+              )}
             </div>
 
             <PaymentBreakdownBar
               doneOrders={summary?.doneOrders || 0}
               cashRevenue={summary?.cashRevenue || 0}
               qrisRevenue={summary?.qrisRevenue || 0}
+              splitRevenue={summary?.splitRevenue || 0}
             />
           </div>
         )}
@@ -594,7 +608,7 @@ function OrderHistoryModal({ orders, onClose }) {
                       </td>
                       <td className="py-2.5 pr-3 text-right font-semibold text-gray-700 whitespace-nowrap">{fmt(order.totalAmount)}</td>
                       <td className="py-2.5 pr-3 text-xs text-gray-500 whitespace-nowrap">
-                        {order.paymentMethod === 'qris' ? '📱 QRIS' : order.status === 'cancelled' ? '-' : '💵 Cash'}
+                        {order.paymentMethod === 'qris' ? '📱 QRIS' : order.paymentMethod === 'split' ? '✂️ Split' : order.status === 'cancelled' ? '-' : '💵 Cash'}
                       </td>
                       <td className="py-2.5 text-center">
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
@@ -620,19 +634,22 @@ function OrderHistoryModal({ orders, onClose }) {
   );
 }
 
-function PaymentBreakdownBar({ doneOrders, cashRevenue, qrisRevenue }) {
+function PaymentBreakdownBar({ doneOrders, cashRevenue, qrisRevenue, splitRevenue = 0 }) {
   if (doneOrders === 0) return null;
-  const total = cashRevenue + qrisRevenue;
-  const cashPct = total > 0 ? Math.round((cashRevenue / total) * 100) : 0;
-  const qrisPct = 100 - cashPct;
+  const total = cashRevenue + qrisRevenue + splitRevenue;
+  const cashPct  = total > 0 ? Math.round((cashRevenue  / total) * 100) : 0;
+  const qrisPct  = total > 0 ? Math.round((qrisRevenue  / total) * 100) : 0;
+  const splitPct = total > 0 ? 100 - cashPct - qrisPct : 0;
   return (
     <div>
       <div className="flex justify-between text-xs text-gray-500 mb-1.5">
         <span>💵 Cash {cashPct}%</span>
+        {splitPct > 0 && <span>✂️ Split {splitPct}%</span>}
         <span>QRIS {qrisPct}% 📱</span>
       </div>
       <div className="h-3 rounded-full bg-violet-100 overflow-hidden flex">
         <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${cashPct}%` }} />
+        <div className="h-full bg-orange-400 transition-all duration-500" style={{ width: `${splitPct}%` }} />
         <div className="h-full bg-violet-400 transition-all duration-500" style={{ width: `${qrisPct}%` }} />
       </div>
     </div>

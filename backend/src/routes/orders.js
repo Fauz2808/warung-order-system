@@ -334,20 +334,33 @@ router.put('/:id/status', async (req, res) => {
 });
 
 // PATCH /api/orders/:id/mark-paid — tandai order sudah lunas (kasir)
-// Body: { notes: "...", paymentMethod: "cash" | "qris" }
+// Body: { notes: "...", paymentMethod: "cash" | "qris" | "split", cashAmount?: number, qrisAmount?: number }
 router.patch('/:id/mark-paid', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { notes, paymentMethod } = req.body;
+    const { notes, paymentMethod, cashAmount, qrisAmount } = req.body;
 
     const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
     }
 
+    // Validasi pisah bayar
+    if (paymentMethod === 'split') {
+      const cash = parseInt(cashAmount) || 0;
+      const qris = parseInt(qrisAmount) || 0;
+      if (cash <= 0 || qris <= 0) {
+        return res.status(400).json({ success: false, message: 'Nominal cash dan QRIS harus lebih dari 0' });
+      }
+      if (cash + qris !== existing.totalAmount) {
+        return res.status(400).json({ success: false, message: 'Total pembayaran tidak sesuai dengan tagihan' });
+      }
+    }
+
+    const validMethods = ['cash', 'qris', 'split'];
     const updateData = {
       isPaid: true,
-      paymentMethod: paymentMethod === 'qris' ? 'qris' : 'cash',
+      paymentMethod: validMethods.includes(paymentMethod) ? paymentMethod : 'cash',
     };
     // Append catatan pembayaran ke notes yang sudah ada
     if (notes) {

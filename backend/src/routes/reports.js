@@ -56,7 +56,7 @@ router.get('/summary', async (req, res) => {
 
     const doneWhere = { status: 'done', createdAt: { gte: start, lte: end } };
 
-    const [totalOrders, doneOrders, cancelledOrders, revenue, totalItems, cashRevenue, qrisRevenue, cashOrders, qrisOrders] = await Promise.all([
+    const [totalOrders, doneOrders, cancelledOrders, revenue, totalItems, cashRevenue, qrisRevenue, splitRevenue, cashOrders, qrisOrders, splitOrders] = await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: start, lte: end } } }),
       prisma.order.count({ where: doneWhere }),
       prisma.order.count({ where: { status: 'cancelled', createdAt: { gte: start, lte: end } } }),
@@ -66,8 +66,11 @@ router.get('/summary', async (req, res) => {
       prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'cash' }, _sum: { totalAmount: true } }),
       // Breakdown QRIS
       prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'qris' }, _sum: { totalAmount: true } }),
+      // Breakdown Split
+      prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'split' }, _sum: { totalAmount: true } }),
       prisma.order.count({ where: { ...doneWhere, paymentMethod: 'cash' } }),
       prisma.order.count({ where: { ...doneWhere, paymentMethod: 'qris' } }),
+      prisma.order.count({ where: { ...doneWhere, paymentMethod: 'split' } }),
     ]);
 
     res.json({
@@ -81,8 +84,10 @@ router.get('/summary', async (req, res) => {
         totalItems: totalItems._sum.quantity || 0,
         cashRevenue: cashRevenue._sum.totalAmount || 0,
         qrisRevenue: qrisRevenue._sum.totalAmount || 0,
+        splitRevenue: splitRevenue._sum.totalAmount || 0,
         cashOrders,
         qrisOrders,
+        splitOrders,
       },
     });
   } catch (error) {
