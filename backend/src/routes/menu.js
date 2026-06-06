@@ -32,6 +32,12 @@ router.get('/', async (req, res) => {
       where: {
         ...(category ? { category } : {}),
       },
+      include: {
+        modifierGroups: {
+          include: { group: { include: { options: { where: { isAvailable: true }, orderBy: { sortOrder: 'asc' } } } } },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });
 
@@ -45,7 +51,15 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const menu = await prisma.menu.findUnique({ where: { id } });
+    const menu = await prisma.menu.findUnique({
+      where: { id },
+      include: {
+        modifierGroups: {
+          include: { group: { include: { options: { where: { isAvailable: true }, orderBy: { sortOrder: 'asc' } } } } },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
 
     if (!menu) {
       return res.status(404).json({ success: false, message: 'Menu tidak ditemukan' });

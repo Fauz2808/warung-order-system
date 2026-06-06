@@ -27,16 +27,69 @@ model Menu {
   name        String
   description String?
   price       Int         // dalam Rupiah, contoh: 25000
-  category    String      // "signature" | "coffee" | "americano" | "slow-bar" | "non-coffee" | "foods" | "additional"
+  category    String
   imageUrl    String?
   isAvailable Boolean     @default(true)
   stock       Int?        // null = unlimited; 0 = habis
-  hasTemperatureOption Boolean @default(false)  // true = tampilkan opsi Hot/Ice
-  hasAdditionalEspresso  Boolean @default(false)   // toggle additional espresso shot
-  additionalEspressoPrice Int    @default(3000)     // harga per shot dalam Rupiah
+  hasTemperatureOption Boolean @default(false)
+  hasAdditionalEspresso  Boolean @default(false)
+  additionalEspressoPrice Int    @default(3000)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orderItems  OrderItem[]
+  modifierGroups MenuModifierGroup[]
+}
+
+// ─── Modifier System ──────────────────────────────────
+
+// Grup modifier: "Ukuran", "Suhu", "Tambahan Topping", dll
+model ModifierGroup {
+  id          Int                 @id @default(autoincrement())
+  name        String              // "Ukuran", "Suhu", "Tambahan"
+  required    Boolean             @default(false)   // wajib dipilih customer
+  multiSelect Boolean             @default(false)   // bisa pilih lebih dari 1 opsi
+  minSelect   Int                 @default(0)
+  maxSelect   Int?                // null = tidak ada batas (untuk multiSelect)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  options     ModifierOption[]
+  menuLinks   MenuModifierGroup[]
+}
+
+// Opsi dalam grup: "Small", "Medium", "Large" / "Hot", "Iced"
+model ModifierOption {
+  id          Int            @id @default(autoincrement())
+  groupId     Int
+  group       ModifierGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name        String         // "Small", "Hot", "Oat Milk"
+  priceAdd    Int            @default(0)    // tambahan harga (bisa 0)
+  isDefault   Boolean        @default(false)
+  isAvailable Boolean        @default(true)
+  sortOrder   Int            @default(0)
+  orderItemModifiers OrderItemModifier[]
+}
+
+// Junction: menu ↔ modifier group (many-to-many)
+model MenuModifierGroup {
+  menuId    Int
+  menu      Menu          @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  groupId   Int
+  group     ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sortOrder Int           @default(0)
+
+  @@id([menuId, groupId])
+}
+
+// Modifier yang dipilih customer saat order — snapshot
+model OrderItemModifier {
+  id          Int             @id @default(autoincrement())
+  orderItemId Int
+  orderItem   OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  optionId    Int?
+  option      ModifierOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
+  groupName   String          // snapshot nama grup
+  optionName  String          // snapshot nama opsi
+  priceAdd    Int             // snapshot harga tambahan
 }
 
 model Table {
@@ -91,12 +144,13 @@ model OrderItem {
   id       Int     @id @default(autoincrement())
   orderId  Int
   order    Order   @relation(fields: [orderId], references: [id])
-  menuId   Int?    // nullable — null jika menu sudah dihapus
+  menuId   Int?
   menu     Menu?   @relation(fields: [menuId], references: [id])
-  menuName String  @default("")  // snapshot nama menu saat order dibuat
+  menuName String  @default("")
   quantity Int
-  price    Int     // snapshot harga saat order dibuat
-  notes    String? // catatan per item, contoh: "tidak pakai pedas"
-  additionalEspressoShots Int @default(0)   // jumlah shot yang dipesan
-  additionalEspressoPrice Int @default(0)   // snapshot harga per shot saat order
+  price    Int     // snapshot harga dasar (belum termasuk modifier)
+  notes    String?
+  additionalEspressoShots Int @default(0)
+  additionalEspressoPrice Int @default(0)
+  modifiers OrderItemModifier[]
 }

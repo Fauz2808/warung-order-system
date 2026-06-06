@@ -15,6 +15,7 @@ const reportRoutes     = require('./src/routes/reports');
 const settingsRoutes   = require('./src/routes/settings');
 const categoryRoutes   = require('./src/routes/categories');
 const userRoutes       = require('./src/routes/users');
+const modifierRoutes   = require('./src/routes/modifiers');
 
 const app = express();
 const server = http.createServer(app); // Bungkus express dengan http server (wajib untuk Socket.IO)
@@ -62,6 +63,7 @@ app.use('/api/reports',     reportRoutes);
 app.use('/api/settings',    settingsRoutes);
 app.use('/api/categories',  categoryRoutes);
 app.use('/api/users',       userRoutes);
+app.use('/api/modifiers',   modifierRoutes);
 
 // Health check — buat cek server jalan
 app.get('/api/health', (req, res) => {

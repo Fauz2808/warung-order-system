@@ -962,12 +962,24 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
                 {order.items?.map((item) => (
                   <div key={item.id} className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm" style={{ color: '#374151' }}>
-                        {item.quantity}× {item.menuName || item.menu?.name}
-                      </span>
-                      {item.notes && (
-                        <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded"
-                          style={{ background: '#FEF3C7', color: '#92400E' }}>{item.notes}</span>
+                      <div className="flex items-center flex-wrap gap-1">
+                        <span className="text-sm" style={{ color: '#374151' }}>
+                          {item.quantity}× {item.menuName || item.menu?.name}
+                        </span>
+                        {item.notes && (
+                          <span className="text-xs px-1.5 py-0.5 rounded"
+                            style={{ background: '#FEF3C7', color: '#92400E' }}>{item.notes}</span>
+                        )}
+                      </div>
+                      {item.modifiers?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {item.modifiers.map((mod, idx) => (
+                            <span key={idx} className="text-xs px-1.5 py-0.5 rounded-full"
+                              style={{ background: '#F3F4F6', color: '#6B7280' }}>
+                              {mod.optionName}{mod.priceAdd > 0 ? ` +${formatRupiah(mod.priceAdd)}` : ''}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <span className="ml-2 shrink-0 text-xs" style={{ color: '#9CA3AF' }}>

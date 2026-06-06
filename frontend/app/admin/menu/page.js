@@ -4,7 +4,8 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getMenu, createMenu, updateMenu, deleteMenu, uploadMenuImage, deleteMenuImage, adjustStock,
-         getCategories, createCategory, updateCategory, deleteCategory } from '@/lib/api';
+         getCategories, createCategory, updateCategory, deleteCategory,
+         getModifiers, setMenuModifiers } from '@/lib/api';
 import { Plus, Gear, ForkKnife } from '@phosphor-icons/react';
 
 const formatRupiah = (n) =>
@@ -26,6 +27,7 @@ export default function AdminMenuPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [uploadTarget, setUploadTarget] = useState(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [selectedGroupIds, setSelectedGroupIds] = useState(new Set());
 
   // State untuk gambar di form Tambah/Edit
   const [imageFile, setImageFile] = useState(null);
@@ -42,24 +44,38 @@ export default function AdminMenuPage() {
     queryFn: getCategories,
   });
 
+  const { data: modifierGroups = [] } = useQuery({
+    queryKey: ['modifier-groups'],
+    queryFn: getModifiers,
+  });
+
   // Helper: info kategori by slug
   const getCategoryInfo = (slug) => {
     const cat = categories.find((c) => c.slug === slug);
     return cat ? { label: cat.label, emoji: cat.emoji, color: 'bg-gray-100 text-gray-700' } : { label: slug, emoji: '🍽️', color: 'bg-gray-100 text-gray-600' };
   };
 
+  // Helper: simpan modifier groups ke menu setelah create/update
+  const saveModifiers = async (menuId) => {
+    const groupIds = Array.from(selectedGroupIds);
+    try {
+      await setMenuModifiers(menuId, groupIds);
+    } catch {
+      toast.error('Menu tersimpan, tapi modifier gagal disimpan. Coba edit menu kembali.');
+    }
+  };
+
   // Tambah menu baru
   const createMutation = useMutation({
     mutationFn: createMenu,
     onSuccess: async (res) => {
-      // Kalau ada file yang dipilih, upload dulu sebelum tutup modal
-      if (imageFile && res.data?.id) {
-        try {
-          await uploadMenuImage(res.data.id, imageFile);
-        } catch {
+      const menuId = res.data?.id;
+      if (imageFile && menuId) {
+        try { await uploadMenuImage(menuId, imageFile); } catch {
           toast.error('Menu tersimpan, tapi foto gagal diupload. Coba upload via tombol foto.');
         }
       }
+      if (menuId) await saveModifiers(menuId);
       queryClient.invalidateQueries({ queryKey: ['menu-admin'] });
       toast.success('Menu berhasil ditambahkan!');
       closeModal();
@@ -72,12 +88,11 @@ export default function AdminMenuPage() {
     mutationFn: ({ id, data }) => updateMenu(id, data),
     onSuccess: async (_, { id }) => {
       if (imageFile) {
-        try {
-          await uploadMenuImage(id, imageFile);
-        } catch {
+        try { await uploadMenuImage(id, imageFile); } catch {
           toast.error('Menu tersimpan, tapi foto gagal diupload. Coba upload via tombol foto.');
         }
       }
+      await saveModifiers(id);
       queryClient.invalidateQueries({ queryKey: ['menu-admin'] });
       toast.success('Menu berhasil diperbarui!');
       closeModal();
@@ -149,6 +164,7 @@ export default function AdminMenuPage() {
   const openAdd = () => {
     setEditData(null);
     setForm({ ...EMPTY_FORM, category: categories[0]?.slug || '' });
+    setSelectedGroupIds(new Set());
     setImageFile(null);
     setImagePreview(null);
     setShowModal(true);
@@ -167,6 +183,9 @@ export default function AdminMenuPage() {
       hasAdditionalEspresso: item.hasAdditionalEspresso || false,
       additionalEspressoPrice: item.additionalEspressoPrice || 3000,
     });
+    // Pre-populate modifier groups yang sudah di-assign ke menu ini
+    const existingGroupIds = (item.modifierGroups || []).map((mg) => mg.groupId);
+    setSelectedGroupIds(new Set(existingGroupIds));
     setImageFile(null);
     setImagePreview(item.imageUrl || null);
     setShowModal(true);
@@ -176,6 +195,7 @@ export default function AdminMenuPage() {
     setShowModal(false);
     setEditData(null);
     setForm(EMPTY_FORM);
+    setSelectedGroupIds(new Set());
     setImageFile(null);
     setImagePreview(null);
   };
@@ -723,6 +743,62 @@ export default function AdminMenuPage() {
                   </div>
                 )}
               </div>
+
+              {/* ── Modifier Groups ── */}
+              {modifierGroups.length > 0 && (
+                <div className="pt-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Modifier Groups</p>
+                      <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Opsi pilihan yang muncul saat customer order (ukuran, suhu, topping, dll)</p>
+                    </div>
+                    {selectedGroupIds.size > 0 && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#D8F3DC', color: '#1B4332' }}>
+                        {selectedGroupIds.size} aktif
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {modifierGroups.map((group) => {
+                      const isChecked = selectedGroupIds.has(group.id);
+                      return (
+                        <button
+                          key={group.id}
+                          type="button"
+                          onClick={() => setSelectedGroupIds((prev) => {
+                            const next = new Set(prev);
+                            isChecked ? next.delete(group.id) : next.add(group.id);
+                            return next;
+                          })}
+                          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border-2 transition text-left"
+                          style={{
+                            borderColor: isChecked ? '#1B4332' : '#E8ECE4',
+                            background: isChecked ? '#F0FDF4' : '#FAFAF8',
+                          }}>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>{group.name}</p>
+                              {group.required && (
+                                <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: '#FEF3C7', color: '#92400E' }}>Wajib</span>
+                              )}
+                              {group.multiSelect && (
+                                <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>Multi</span>
+                              )}
+                            </div>
+                            <p className="text-xs mt-0.5 truncate" style={{ color: '#9CA3AF' }}>
+                              {group.options.map((o) => `${o.name}${o.priceAdd > 0 ? ` +${o.priceAdd.toLocaleString('id-ID')}` : ''}`).join(' · ') || 'Belum ada opsi'}
+                            </p>
+                          </div>
+                          <div className="shrink-0 ml-2 w-5 h-5 rounded border-2 flex items-center justify-center transition"
+                            style={{ borderColor: isChecked ? '#1B4332' : '#D1D5DB', background: isChecked ? '#1B4332' : 'transparent' }}>
+                            {isChecked && <span className="text-white" style={{ fontSize: 10, fontWeight: 700 }}>✓</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Toggle tersedia */}
               <div className="flex items-center justify-between py-2">

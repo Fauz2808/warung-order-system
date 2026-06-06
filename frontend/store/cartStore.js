@@ -3,32 +3,35 @@
 
 import { create } from 'zustand';
 
+// Buat unique key per kombinasi menu + modifiers
+const makeCartKey = (menuId, modifiers = []) => {
+  const optionIds = [...modifiers].map((m) => m.optionId).sort().join('-');
+  return optionIds ? `${menuId}_${optionIds}` : `${menuId}`;
+};
+
 const useCartStore = create((set, get) => ({
-  items: [],      // [{ menuId, name, price, quantity, notes }]
+  items: [],      // [{ cartKey, menuId, name, price, quantity, notes, modifiers, ... }]
   tableId: null,
   tableNumber: null,
 
-  // Set meja aktif
   setTable: (tableId, tableNumber) => set({ tableId, tableNumber }),
 
-  // Tambah item ke keranjang
+  // Tambah item ke keranjang (modifiers = [{ optionId, groupName, optionName, priceAdd }])
   addItem: (menu) => {
     const items = get().items;
-    // Support both menu.id (old) and menu.menuId (new explicit form)
     const resolvedId = menu.menuId ?? menu.id;
-    const existing = items.find((i) => i.menuId === resolvedId);
+    const modifiers = menu.modifiers || [];
+    const cartKey = makeCartKey(resolvedId, modifiers);
+
+    const existing = items.find((i) => i.cartKey === cartKey);
     if (existing) {
-      // Kalau sudah ada, tambah quantity
-      set({
-        items: items.map((i) =>
-          i.menuId === resolvedId ? { ...i, quantity: i.quantity + 1 } : i
-        ),
-      });
+      set({ items: items.map((i) => i.cartKey === cartKey ? { ...i, quantity: i.quantity + 1 } : i) });
     } else {
       set({
         items: [
           ...items,
           {
+            cartKey,
             menuId: resolvedId,
             name: menu.name,
             price: menu.price,
@@ -39,47 +42,40 @@ const useCartStore = create((set, get) => ({
             hasAdditionalEspresso: menu.hasAdditionalEspresso || false,
             additionalEspressoShots: menu.additionalEspressoShots || 0,
             additionalEspressoPrice: menu.additionalEspressoPrice || 0,
+            modifiers,
           },
         ],
       });
     }
   },
 
-  // Update pilihan suhu per item (hot / ice)
-  updateTemperature: (menuId, temperature) =>
-    set({ items: get().items.map((i) => (i.menuId === menuId ? { ...i, temperature } : i)) }),
+  updateTemperature: (cartKey, temperature) =>
+    set({ items: get().items.map((i) => (i.cartKey === cartKey ? { ...i, temperature } : i)) }),
 
-  // Kurangi quantity (kalau 0, hapus dari keranjang)
-  removeItem: (menuId) => {
+  // Kurangi quantity (kurangi per cartKey)
+  removeItem: (cartKey) => {
     const items = get().items;
-    const existing = items.find((i) => i.menuId === menuId);
+    const existing = items.find((i) => i.cartKey === cartKey);
     if (!existing) return;
-
     if (existing.quantity === 1) {
-      set({ items: items.filter((i) => i.menuId !== menuId) });
+      set({ items: items.filter((i) => i.cartKey !== cartKey) });
     } else {
-      set({
-        items: items.map((i) =>
-          i.menuId === menuId ? { ...i, quantity: i.quantity - 1 } : i
-        ),
-      });
+      set({ items: items.map((i) => i.cartKey === cartKey ? { ...i, quantity: i.quantity - 1 } : i) });
     }
   },
 
-  // Update catatan per item
-  setNotes: (menuId, notes) =>
-    set({ items: get().items.map((i) => (i.menuId === menuId ? { ...i, notes } : i)) }),
+  setNotes: (cartKey, notes) =>
+    set({ items: get().items.map((i) => (i.cartKey === cartKey ? { ...i, notes } : i)) }),
 
-  // Total harga (termasuk espresso extra)
+  // Total harga (base + espresso + modifiers) × quantity
   getTotal: () => get().items.reduce((sum, i) => {
     const espressoExtra = (i.additionalEspressoShots || 0) * (i.additionalEspressoPrice || 0);
-    return sum + (i.price + espressoExtra) * i.quantity;
+    const modifierExtra = (i.modifiers || []).reduce((s, m) => s + (m.priceAdd || 0), 0);
+    return sum + (i.price + espressoExtra + modifierExtra) * i.quantity;
   }, 0),
 
-  // Total jumlah item
   getTotalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
 
-  // Kosongkan keranjang setelah order berhasil
   clearCart: () => set({ items: [] }),
 }));
 

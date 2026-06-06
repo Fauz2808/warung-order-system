@@ -140,4 +140,35 @@ export const changePassword = (data) => {
   return api.put('/auth/change-password', data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
 };
 
+// ─── Modifiers ────────────────────────────────────────
+export const getModifiers = () => api.get('/modifiers').then((r) => r.data.data);
+export const createModifierGroup = (data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.post('/modifiers', data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+export const updateModifierGroup = (id, data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.put(`/modifiers/${id}`, data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+export const deleteModifierGroup = (id) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.delete(`/modifiers/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+export const createModifierOption = (groupId, data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.post(`/modifiers/${groupId}/options`, data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+export const updateModifierOption = (optionId, data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.put(`/modifiers/options/${optionId}`, data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+export const deleteModifierOption = (optionId) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.delete(`/modifiers/options/${optionId}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+export const setMenuModifiers = (menuId, groupIds) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.put(`/modifiers/menu/${menuId}`, { groupIds }, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
+
 export default api;

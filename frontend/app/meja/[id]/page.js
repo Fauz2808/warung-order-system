@@ -111,6 +111,7 @@ export default function MejaPage() {
         ].filter(Boolean).join(' · ') || undefined,
         additionalEspressoShots: i.additionalEspressoShots || 0,
         additionalEspressoPrice: i.additionalEspressoPrice || 0,
+        modifiers: (i.modifiers || []).map((m) => ({ optionId: m.optionId })),
       })),
     });
   };
@@ -119,7 +120,7 @@ export default function MejaPage() {
 
   const handleAddItem = (item) => setAddItemModal(item);
 
-  const handleConfirmAdd = ({ temp, notes, additionalEspressoShots = 0, additionalEspressoPrice = 0 }) => {
+  const handleConfirmAdd = ({ temp, notes, additionalEspressoShots = 0, additionalEspressoPrice = 0, modifiers = [] }) => {
     if (!addItemModal) return;
     addItem({
       menuId: addItemModal.id,
@@ -133,6 +134,7 @@ export default function MejaPage() {
       additionalEspressoShots,
       additionalEspressoPrice,
       notes: notes || '',
+      modifiers,
     });
     setAddItemModal(null);
     toast.success(`${addItemModal.name} ditambahkan!`, { duration: 1500 });
@@ -590,9 +592,41 @@ function MenuCard({ item, quantity, onAdd, onRemove, needsTempChoice }) {
 // ─── AddItemModal ──────────────────────────────────────
 function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
   const [selectedTemp, setSelectedTemp] = useState(needsTemp ? null : 'none');
-  const [selectedChips, setSelectedChips] = useState([]); // chips yang aktif
-  const [customNote, setCustomNote] = useState('');        // free text dari customer
+  const [selectedChips, setSelectedChips] = useState([]);
+  const [customNote, setCustomNote] = useState('');
   const [espressoShots, setEspressoShots] = useState(0);
+  // modifierSelections: { [groupId]: Set<optionId> }
+  const [modifierSelections, setModifierSelections] = useState({});
+
+  const modifierGroups = (item.modifierGroups || []).map((mg) => mg.group).filter(Boolean);
+
+  const toggleModifierOption = (group, option) => {
+    setModifierSelections((prev) => {
+      const current = prev[group.id] ? new Set(prev[group.id]) : new Set();
+      if (group.multiSelect) {
+        current.has(option.id) ? current.delete(option.id) : current.add(option.id);
+      } else {
+        // single select — deselect if same, else replace
+        if (current.has(option.id)) { current.clear(); } else { current.clear(); current.add(option.id); }
+      }
+      return { ...prev, [group.id]: current };
+    });
+  };
+
+  // Cek semua required group sudah dipilih
+  const requiredGroupsMet = modifierGroups
+    .filter((g) => g.required)
+    .every((g) => modifierSelections[g.id]?.size > 0);
+
+  // Flatten semua selected options jadi array modifier
+  const selectedModifiers = modifierGroups.flatMap((group) => {
+    const selectedIds = modifierSelections[group.id] || new Set();
+    return group.options
+      .filter((o) => selectedIds.has(o.id))
+      .map((o) => ({ optionId: o.id, groupName: group.name, optionName: o.name, priceAdd: o.priceAdd }));
+  });
+
+  const modifierExtra = selectedModifiers.reduce((s, m) => s + m.priceAdd, 0);
 
   // Gabungkan espresso note + chips aktif + custom note saat submit
   const espressoNote = espressoShots > 0 ? `+${espressoShots} Espresso Shot` : null;
@@ -622,8 +656,12 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
     'signature': '⭐', 'coffee': '☕', 'americano': '🫖',
     'slow-bar': '🔬', 'non-coffee': '🧋', 'foods': '🍟', 'additional': '➕'
   }[item.category] ?? '☕';
-  const canConfirm = !needsTemp || selectedTemp !== null;
+  const canConfirm = (!needsTemp || selectedTemp !== null) && requiredGroupsMet;
   const quickNotes = ['Less sugar', 'Less ice', 'No ice', 'Extra sweet', 'No sugar'];
+
+  // Harga total dengan modifier
+  const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+  const totalPrice = item.price + modifierExtra + (espressoShots * (item.additionalEspressoPrice || 3000));
 
   return (
     <div className="fixed inset-0 z-40 flex items-end">
@@ -722,6 +760,43 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
             </div>
           )}
 
+          {/* ── Modifier Groups ── */}
+          {modifierGroups.map((group) => (
+            <div key={group.id} className="mb-5">
+              <div className="flex items-center gap-2 mb-2.5">
+                <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>{group.name}</p>
+                {group.required
+                  ? <span className="text-xs font-semibold" style={{ color: '#DC2626' }}>* Wajib</span>
+                  : <span className="text-xs" style={{ color: '#9CA3AF' }}>Opsional</span>}
+                {group.multiSelect && (
+                  <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>Bisa pilih lebih dari 1</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {group.options.map((option) => {
+                  const isSelected = modifierSelections[group.id]?.has(option.id);
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => toggleModifierOption(group, option)}
+                      className="flex items-center justify-between px-3 py-2.5 rounded-xl border-2 transition active:scale-95 text-left"
+                      style={{
+                        borderColor: isSelected ? '#1B4332' : '#E8ECE4',
+                        background: isSelected ? '#F0FDF4' : '#FAFAF8',
+                      }}>
+                      <span className="text-sm font-medium" style={{ color: isSelected ? '#1B4332' : '#374151' }}>{option.name}</span>
+                      {option.priceAdd > 0 && (
+                        <span className="text-xs font-semibold ml-1" style={{ color: isSelected ? '#1B4332' : '#9CA3AF' }}>
+                          +{fmt(option.priceAdd)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
           {/* Catatan */}
           <div className="mb-2">
             <p className="text-sm font-semibold mb-2" style={{ color: '#1A1A1A' }}>
@@ -771,12 +846,15 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
               notes: combinedNotes,
               additionalEspressoShots: espressoShots,
               additionalEspressoPrice: item.additionalEspressoPrice || 3000,
+              modifiers: selectedModifiers,
             })}
             disabled={!canConfirm}
             className="w-full py-4 rounded-2xl font-bold text-base text-white transition disabled:opacity-40"
             style={{ background: '#1B4332' }}
           >
-            {needsTemp && !selectedTemp ? 'Pilih suhu dulu' : 'Tambah ke Keranjang'}
+            {!canConfirm
+              ? (needsTemp && !selectedTemp ? 'Pilih suhu dulu' : 'Pilih opsi yang wajib')
+              : `Tambah ke Keranjang · ${fmt(totalPrice)}`}
           </button>
           <button onClick={onClose} className="w-full py-2 mt-1 text-sm" style={{ color: '#9CA3AF' }}>
             Batal

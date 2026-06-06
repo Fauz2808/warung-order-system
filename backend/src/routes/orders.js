@@ -24,6 +24,7 @@ const createOrderSchema = z.object({
         notes: z.string().optional(),
         additionalEspressoShots: z.number().int().min(0).optional().default(0),
         additionalEspressoPrice: z.number().int().min(0).optional().default(0),
+        modifiers: z.array(z.object({ optionId: z.number().int().positive() })).optional().default([]),
       })
     )
     .min(1, 'Order harus punya minimal 1 item'),
@@ -175,11 +176,22 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Hitung total
+    // Ambil semua modifier options yang dipakai (untuk snapshot harga)
+    const allOptionIds = items.flatMap((item) => (item.modifiers || []).map((m) => m.optionId));
+    const modifierOptions = allOptionIds.length > 0
+      ? await prisma.modifierOption.findMany({
+          where: { id: { in: allOptionIds } },
+          include: { group: { select: { name: true } } },
+        })
+      : [];
+    const optionMap = Object.fromEntries(modifierOptions.map((o) => [o.id, o]));
+
+    // Hitung total (base + espresso + modifiers) × quantity
     const totalAmount = items.reduce((sum, item) => {
       const basePrice = menuMap[item.menuId].price;
       const espressoExtra = (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0);
-      return sum + (basePrice + espressoExtra) * item.quantity;
+      const modifierExtra = (item.modifiers || []).reduce((s, m) => s + (optionMap[m.optionId]?.priceAdd || 0), 0);
+      return sum + (basePrice + espressoExtra + modifierExtra) * item.quantity;
     }, 0);
 
     // Hitung dailyNumber — nomor urut order hari ini (WIB), reset tiap hari
@@ -223,6 +235,16 @@ router.post('/', async (req, res) => {
               notes: item.notes,
               additionalEspressoShots: item.additionalEspressoShots || 0,
               additionalEspressoPrice: item.additionalEspressoPrice || 0,
+              modifiers: (item.modifiers || []).length > 0 ? {
+                create: (item.modifiers || [])
+                  .filter((m) => optionMap[m.optionId])
+                  .map((m) => ({
+                    optionId: m.optionId,
+                    groupName: optionMap[m.optionId].group.name,
+                    optionName: optionMap[m.optionId].name,
+                    priceAdd: optionMap[m.optionId].priceAdd,
+                  })),
+              } : undefined,
             })),
           },
         },
@@ -233,7 +255,7 @@ router.post('/', async (req, res) => {
     // Fetch order lengkap dengan relasi SETELAH transaction selesai
     const order = await prisma.order.findUnique({
       where: { id: createdOrder[0].id },
-      include: { table: true, items: { include: { menu: true } } },
+      include: { table: true, items: { include: { menu: true, modifiers: true } } },
     });
 
     // Update status meja jadi occupied
@@ -277,7 +299,7 @@ router.get('/pending-yesterday', async (req, res) => {
         createdAt: { lt: todayMidnightWIB },
         status: { in: ['pending', 'preparing'] },
       },
-      include: { table: true, items: { include: { menu: true } } },
+      include: { table: true, items: { include: { menu: true, modifiers: true } } },
       orderBy: { createdAt: 'desc' },
     });
     res.json({ success: true, data: orders, count: orders.length });
@@ -303,7 +325,7 @@ router.put('/:id/status', async (req, res) => {
     const order = await prisma.order.update({
       where: { id },
       data: { status: parsed.data.status },
-      include: { table: true, items: { include: { menu: true } } },
+      include: { table: true, items: { include: { menu: true, modifiers: true } } },
     });
 
     // Jika order selesai (done), cek apakah semua order di meja sudah done
@@ -372,7 +394,7 @@ router.patch('/:id/mark-paid', async (req, res) => {
     const order = await prisma.order.update({
       where: { id },
       data: updateData,
-      include: { table: true, items: { include: { menu: true } } },
+      include: { table: true, items: { include: { menu: true, modifiers: true } } },
     });
 
     if (req.io) {
@@ -500,7 +522,7 @@ router.put('/:id/items', authMiddleware, async (req, res) => {
 
     const updated = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { table: true, items: { include: { menu: true } } },
+      include: { table: true, items: { include: { menu: true, modifiers: true } } },
     });
 
     if (req.io) req.io.emit('order:status_update', { orderId });
