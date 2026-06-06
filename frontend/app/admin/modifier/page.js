@@ -16,7 +16,7 @@ function formatRupiah(n) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 }
 
-// ─── Modal Tambah/Edit Group ─────────────────────────────
+// ─── Modal Tambah/Edit Kategori Pilihan ──────────────────
 function GroupModal({ group, onClose, onSave, isPending }) {
   const [form, setForm] = useState(group || EMPTY_GROUP);
   const isEdit = !!group?.id;
@@ -47,20 +47,20 @@ function GroupModal({ group, onClose, onSave, isPending }) {
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#E8ECE4' }}>
           <h2 className="text-lg font-bold" style={{ color: '#1A1A1A' }}>
-            {isEdit ? 'Edit Modifier Group' : 'Tambah Modifier Group'}
+            {isEdit ? 'Edit Kategori Pilihan' : 'Tambah Kategori Pilihan'}
           </h2>
           <button onClick={onClose} style={{ color: '#9CA3AF', fontSize: '1.25rem' }}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold mb-1" style={{ color: '#1A1A1A' }}>Nama Group *</label>
+            <label className="block text-xs font-semibold mb-1" style={{ color: '#1A1A1A' }}>Nama Kategori *</label>
             <input
               required autoFocus
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="contoh: Ukuran, Suhu, Add-ons"
+              placeholder="contoh: Ukuran, Suhu, Tambahan"
               style={inputStyle}
               onFocus={focusStyle} onBlur={blurStyle}
             />
@@ -134,7 +134,7 @@ function GroupModal({ group, onClose, onSave, isPending }) {
               style={{ background: '#1B4332' }}
               onMouseEnter={(e) => !isPending && (e.currentTarget.style.backgroundColor = '#2D6A4F')}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1B4332'}>
-              {isPending ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Tambah Group'}
+              {isPending ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Tambah Kategori'}
             </button>
           </div>
         </form>
@@ -157,7 +157,7 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
     mutationFn: (data) => createModifierOption(group.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modifier-groups'] });
-      toast.success('Opsi berhasil ditambahkan!');
+      toast.success('Pilihan berhasil ditambahkan!');
       setOptionForm(EMPTY_OPTION);
       setShowAddOption(false);
     },
@@ -168,7 +168,7 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
     mutationFn: ({ id, data }) => updateModifierOption(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modifier-groups'] });
-      toast.success('Opsi berhasil diperbarui!');
+      toast.success('Pilihan berhasil diperbarui!');
       setEditOption(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal memperbarui opsi'),
@@ -178,7 +178,7 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
     mutationFn: deleteModifierOption,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modifier-groups'] });
-      toast.success('Opsi dihapus');
+      toast.success('Pilihan dihapus');
       setDeleteOptConfirm(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal menghapus opsi'),
@@ -238,7 +238,7 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
         <div className="px-5 pb-4" style={{ borderTop: '1px dashed #E8ECE4' }}>
           <div className="pt-3 space-y-2">
             {group.options?.length === 0 && (
-              <p className="text-xs text-center py-3" style={{ color: '#9CA3AF' }}>Belum ada opsi. Tambahkan di bawah.</p>
+              <p className="text-xs text-center py-3" style={{ color: '#9CA3AF' }}>Belum ada pilihan. Tambahkan di bawah.</p>
             )}
 
             {group.options?.map((opt) => (
@@ -333,7 +333,7 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
                   type="text"
                   value={optionForm.name}
                   onChange={(e) => setOptionForm({ ...optionForm, name: e.target.value })}
-                  placeholder="Nama opsi (contoh: Medium)"
+                  placeholder="Nama pilihan (contoh: Medium)"
                   style={{ ...inputSm, flex: 2 }}
                   onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
                   onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'}
@@ -371,7 +371,7 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
                 style={{ border: '1.5px dashed #D1D5DB', color: '#6B7280', backgroundColor: 'transparent' }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1B4332'; e.currentTarget.style.color = '#1B4332'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#D1D5DB'; e.currentTarget.style.color = '#6B7280'; }}>
-                + Tambah Opsi
+                + Tambah Pilihan
               </button>
             )}
           </div>
@@ -384,9 +384,9 @@ function GroupCard({ group, onEditGroup, onDeleteGroup }) {
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteOptConfirm(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
             <div className="text-4xl mb-3">🗑️</div>
-            <h3 className="text-lg font-bold mb-1" style={{ color: '#1A1A1A' }}>Hapus Opsi?</h3>
+            <h3 className="text-lg font-bold mb-1" style={{ color: '#1A1A1A' }}>Hapus Pilihan?</h3>
             <p className="text-sm mb-6" style={{ color: '#6B7280' }}>
-              Opsi <strong>{deleteOptConfirm.name}</strong> akan dihapus dari group ini.
+              Pilihan <strong>{deleteOptConfirm.name}</strong> akan dihapus dari kategori ini.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteOptConfirm(null)}
@@ -421,7 +421,7 @@ export default function ModifierPage() {
     mutationFn: createModifierGroup,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modifier-groups'] });
-      toast.success('Modifier group berhasil dibuat!');
+      toast.success('Kategori pilihan berhasil dibuat!');
       setGroupModal(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal membuat group'),
@@ -431,7 +431,7 @@ export default function ModifierPage() {
     mutationFn: ({ id, data }) => updateModifierGroup(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modifier-groups'] });
-      toast.success('Modifier group berhasil diperbarui!');
+      toast.success('Kategori pilihan berhasil diperbarui!');
       setGroupModal(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal memperbarui group'),
@@ -441,7 +441,7 @@ export default function ModifierPage() {
     mutationFn: deleteModifierGroup,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modifier-groups'] });
-      toast.success('Modifier group dihapus');
+      toast.success('Kategori pilihan dihapus');
       setDeleteGroupConfirm(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal menghapus group'),
@@ -462,9 +462,9 @@ export default function ModifierPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: '#1A1A1A' }}>Kelola Modifier</h1>
+          <h1 className="text-xl font-semibold" style={{ color: '#1A1A1A' }}>Opsi Menu</h1>
           <p className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
-            Buat grup opsi seperti Ukuran, Suhu, Add-ons — lalu assign ke menu
+            Buat pilihan seperti Ukuran, Suhu, atau Tambahan — lalu terapkan ke menu
           </p>
         </div>
         <button
@@ -473,7 +473,7 @@ export default function ModifierPage() {
           style={{ backgroundColor: '#1B4332', fontWeight: 500 }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2D6A4F'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1B4332'}>
-          + Tambah Group
+          + Tambah Kategori
         </button>
       </div>
 
@@ -481,7 +481,7 @@ export default function ModifierPage() {
       <div className="rounded-xl px-4 py-3 mb-5 flex items-start gap-2 text-xs" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8' }}>
         <span className="shrink-0 mt-0.5">💡</span>
         <span>
-          Setelah membuat group dan opsi di sini, buka <strong>Kelola Menu</strong> → edit menu → centang modifier group yang ingin diterapkan ke menu tersebut.
+          Setelah membuat kategori dan pilihan di sini, buka <strong>Kelola Menu</strong> → edit menu → centang kategori yang ingin diterapkan ke menu tersebut.
         </span>
       </div>
 
@@ -491,8 +491,8 @@ export default function ModifierPage() {
       ) : groups.length === 0 ? (
         <div className="text-center py-16" style={{ color: '#9CA3AF' }}>
           <p className="text-4xl mb-2">⚙️</p>
-          <p className="font-medium mb-1" style={{ color: '#6B7280' }}>Belum ada modifier group</p>
-          <p className="text-sm">Klik &quot;+ Tambah Group&quot; untuk mulai membuat opsi seperti Ukuran atau Suhu.</p>
+          <p className="font-medium mb-1" style={{ color: '#6B7280' }}>Belum ada kategori pilihan</p>
+          <p className="text-sm">Klik &quot;+ Tambah Kategori&quot; untuk mulai, contoh: Ukuran, Suhu, atau Tambahan.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -526,12 +526,12 @@ export default function ModifierPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteGroupConfirm(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
             <div className="text-4xl mb-3">⚠️</div>
-            <h3 className="text-lg font-bold mb-1" style={{ color: '#1A1A1A' }}>Hapus Modifier Group?</h3>
+            <h3 className="text-lg font-bold mb-1" style={{ color: '#1A1A1A' }}>Hapus Kategori Pilihan?</h3>
             <p className="text-sm mb-2" style={{ color: '#6B7280' }}>
-              Group <strong>{deleteGroupConfirm.name}</strong> dan semua opsinya akan dihapus permanen.
+              Kategori <strong>{deleteGroupConfirm.name}</strong> dan semua pilihannya akan dihapus permanen.
             </p>
             <p className="text-xs mb-6 px-3 py-2 rounded-xl" style={{ background: '#FEF3C7', color: '#92400E' }}>
-              ⚠️ Menu yang menggunakan group ini akan kehilangan modifier tersebut.
+              ⚠️ Menu yang menggunakan kategori ini akan kehilangan pilihan tersebut.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteGroupConfirm(null)}

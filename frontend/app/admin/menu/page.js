@@ -744,13 +744,13 @@ export default function AdminMenuPage() {
                 )}
               </div>
 
-              {/* ── Modifier Groups ── */}
+              {/* ── Pilihan & Tambahan ── */}
               {modifierGroups.length > 0 && (
                 <div className="pt-1">
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Modifier Groups</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Opsi pilihan yang muncul saat customer order (ukuran, suhu, topping, dll)</p>
+                      <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Pilihan & Tambahan</p>
+                      <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Opsi yang muncul saat customer order menu ini (ukuran, suhu, topping, dll)</p>
                     </div>
                     {selectedGroupIds.size > 0 && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#D8F3DC', color: '#1B4332' }}>

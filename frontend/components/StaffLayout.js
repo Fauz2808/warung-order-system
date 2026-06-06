@@ -21,7 +21,7 @@ import {
 const ALL_NAV = [
   { href: '/kasir',             label: 'Kasir',       Icon: ClipboardText, desc: 'Terima & update pesanan', roles: ['owner','kasir'] },
   { href: '/admin/menu',        label: 'Kelola Menu', Icon: ForkKnife,     desc: 'Tambah / edit menu',      roles: ['owner','kasir'] },
-  { href: '/admin/modifier',    label: 'Modifier',    Icon: Sliders,       desc: 'Ukuran, Suhu, Add-ons',   roles: ['owner','kasir'] },
+  { href: '/admin/modifier',    label: 'Opsi Menu',   Icon: Sliders,       desc: 'Pilihan, ukuran, tambahan', roles: ['owner','kasir'] },
   { href: '/admin/meja',        label: 'Kelola Meja', Icon: GridFour,      desc: 'Manage meja & QR Code',   roles: ['owner','kasir'] },
   { href: '/admin/laporan',     label: 'Laporan',     Icon: ChartBar,      desc: 'Ringkasan penjualan',     roles: ['owner'] },
   { href: '/admin/pengaturan',  label: 'Pengaturan',  Icon: Gear,          desc: 'Notifikasi & pengaturan', roles: ['owner','kasir'] },
