@@ -13,7 +13,21 @@ async function main() {
   await prisma.order.deleteMany();
   await prisma.menu.deleteMany();
   await prisma.table.deleteMany();
+  await prisma.category.deleteMany();
   console.log('🗑️  Data lama dihapus\n');
+
+  // ─── Seed Kategori ────────────────────────────────────
+  const categories = [
+    { slug: 'signature',  label: 'Signature',  emoji: '⭐' },
+    { slug: 'coffee',     label: 'Coffee',      emoji: '☕' },
+    { slug: 'americano',  label: 'Americano',   emoji: '🖤' },
+    { slug: 'slow-bar',   label: 'Slow Bar',    emoji: '🫗' },
+    { slug: 'non-coffee', label: 'Non Coffee',  emoji: '🧋' },
+    { slug: 'foods',      label: 'Foods',       emoji: '🍪' },
+    { slug: 'additional', label: 'Additional',  emoji: '➕' },
+  ];
+  await prisma.category.createMany({ data: categories });
+  console.log(`✅ ${categories.length} kategori berhasil dibuat\n`);
 
   // ─── Seed Menu Carra Coffee ───────────────────────────
   const menuData = [
