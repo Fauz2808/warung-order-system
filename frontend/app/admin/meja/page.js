@@ -5,7 +5,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { QRCodeCanvas } from 'qrcode.react';
-import { getTables, createTable, deleteTable } from '@/lib/api';
+import { getTables, createTable, updateTable, deleteTable, getSettings } from '@/lib/api';
 
 // Gunakan NEXT_PUBLIC_APP_URL jika ada (production), fallback ke window.location.origin
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ||
@@ -20,6 +20,8 @@ const floorLabel = (floor) => {
 export default function AdminMejaPage() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editTable, setEditTable] = useState(null); // table object sedang diedit
+  const [editForm, setEditForm] = useState({ number: '', floor: '1' });
   const [showQR, setShowQR] = useState(null);
   const qrRef = useRef(null);
 
@@ -47,7 +49,7 @@ export default function AdminMejaPage() {
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(
-      `Meja ${showQR.number} · ${floorLabel(showQR.floor)} · Carra Coffee`,
+      `Meja ${showQR.number} · ${floorLabel(showQR.floor)} · ${settings?.businessName || 'Warung Kita'}`,
       out.width / 2,
       canvas.height + padding + labelH / 2 + 4,
     );
@@ -67,6 +69,8 @@ export default function AdminMejaPage() {
     queryFn: getTables,
   });
 
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: getSettings });
+
   const createMutation = useMutation({
     mutationFn: createTable,
     onSuccess: () => {
@@ -76,6 +80,16 @@ export default function AdminMejaPage() {
       setForm({ number: '', floor: '1' });
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal menambahkan meja'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => updateTable(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tables-admin'] });
+      toast.success('Meja berhasil diperbarui!');
+      setEditTable(null);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal memperbarui meja'),
   });
 
   const deleteMutation = useMutation({
@@ -91,6 +105,16 @@ export default function AdminMejaPage() {
   const handleSubmit = (e) => {
     e.preventDefault();
     createMutation.mutate({ number: parseInt(form.number), floor: parseInt(form.floor) });
+  };
+
+  const openEdit = (table) => {
+    setEditTable(table);
+    setEditForm({ number: String(table.number), floor: String(table.floor) });
+  };
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault();
+    updateMutation.mutate({ id: editTable.id, data: { number: parseInt(editForm.number), floor: parseInt(editForm.floor) } });
   };
 
   const floors = [...new Set(tables.map((t) => t.floor))].sort();
@@ -196,6 +220,15 @@ export default function AdminMejaPage() {
                   QR
                 </button>
                 <button
+                  onClick={() => openEdit(table)}
+                  className="flex-1 text-xs py-1.5 rounded-lg font-medium transition"
+                  style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DBEAFE'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
+                >
+                  Edit
+                </button>
+                <button
                   onClick={() => setDeleteConfirm(table.id)}
                   className="flex-1 text-xs py-1.5 rounded-lg font-medium transition"
                   style={{ border: '1px solid #FECACA', color: '#DC2626', backgroundColor: 'transparent' }}
@@ -258,6 +291,80 @@ export default function AdminMejaPage() {
             <p className="text-xs mt-3" style={{ color: '#9CA3AF' }}>
               Print dan tempel di meja {showQR.number}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Meja */}
+      {editTable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setEditTable(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#E8ECE4' }}>
+              <h2 className="text-lg font-bold" style={{ color: '#1A1A1A' }}>Edit Meja {editTable.number}</h2>
+              <button
+                onClick={() => setEditTable(null)}
+                className="text-xl transition"
+                style={{ color: '#9CA3AF' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#6B7280'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#9CA3AF'}
+              >✕</button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: '#1A1A1A' }}>Nomor Meja *</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={editForm.number}
+                  onChange={(e) => setEditForm({ ...editForm, number: e.target.value })}
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+                  style={{ borderColor: '#E8ECE4', color: '#1A1A1A' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B4332'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: '#1A1A1A' }}>Area / Lantai *</label>
+                <select
+                  value={editForm.floor}
+                  onChange={(e) => setEditForm({ ...editForm, floor: e.target.value })}
+                  className="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none bg-white"
+                  style={{ borderColor: '#E8ECE4', color: '#1A1A1A' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B4332'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <option value="1">Outdoor</option>
+                  <option value="2">Indoor</option>
+                  <option value="3">Lantai 3</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditTable(null)}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm transition"
+                  style={{ border: '1px solid #E8ECE4', color: '#6B7280', backgroundColor: 'transparent' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F5EFE6'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateMutation.isPending}
+                  className="flex-1 text-white py-2.5 rounded-xl font-semibold text-sm transition disabled:opacity-50"
+                  style={{ backgroundColor: '#1B4332' }}
+                  onMouseEnter={(e) => !updateMutation.isPending && (e.currentTarget.style.backgroundColor = '#2D6A4F')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1B4332')}
+                >
+                  {updateMutation.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

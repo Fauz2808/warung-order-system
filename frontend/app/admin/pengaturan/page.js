@@ -11,6 +11,16 @@ const EMPTY_USER_FORM  = { username: '', password: '', name: '' };
 const EMPTY_EDIT_FORM  = { name: '', password: '', isActive: true };
 const EMPTY_PW_FORM    = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
+function getCurrentUser() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = localStorage.getItem('kasir_token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return { role: payload.role, username: payload.username, name: payload.name };
+  } catch { return null; }
+}
+
 function NotifToggle() {
   const [permission, setPermission] = useState('default');
   const [isIOS, setIsIOS] = useState(false);
@@ -121,9 +131,14 @@ function getRoleFromToken() {
 
 export default function PengaturanPage() {
   const [isOwner, setIsOwner] = useState(false);
-  useEffect(() => { setIsOwner(getRoleFromToken() === 'owner'); }, []);
+  const [currentUser, setCurrentUser] = useState(null);
+  useEffect(() => {
+    setIsOwner(getRoleFromToken() === 'owner');
+    setCurrentUser(getCurrentUser());
+  }, []);
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ openTime: '08:00', closeTime: '22:00', isForceClose: false });
+  const [bizForm, setBizForm] = useState({ businessName: '', businessTagline: '' });
 
   // Printer state
   const [printerName, setPrinterName]       = useState(null);
@@ -164,11 +179,8 @@ export default function PengaturanPage() {
   // Sync form saat data load
   useEffect(() => {
     if (settings) {
-      setForm({
-        openTime:     settings.openTime,
-        closeTime:    settings.closeTime,
-        isForceClose: settings.isForceClose,
-      });
+      setForm({ openTime: settings.openTime, closeTime: settings.closeTime, isForceClose: settings.isForceClose });
+      setBizForm({ businessName: settings.businessName || '', businessTagline: settings.businessTagline || '' });
     }
   }, [settings]);
 
@@ -179,6 +191,15 @@ export default function PengaturanPage() {
       toast.success('Pengaturan berhasil disimpan!');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal menyimpan'),
+  });
+
+  const saveBizMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      toast.success('Profil bisnis berhasil disimpan!');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal menyimpan profil'),
   });
 
   // Toggle tutup paksa langsung (tanpa klik Save)
@@ -255,11 +276,33 @@ export default function PengaturanPage() {
   return (
     <div className="p-6 max-w-2xl space-y-6" style={{ backgroundColor: '#F5EFE6', minHeight: '100vh' }}>
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: '#1A1A1A' }}>Pengaturan</h1>
-        <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
-          Atur status warung, jam operasional &amp; notifikasi
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: '#1A1A1A' }}>Pengaturan</h1>
+          <p className="text-sm mt-1" style={{ color: '#6B7280' }}>
+            Atur status warung, jam operasional &amp; notifikasi
+          </p>
+        </div>
+        {/* Info user yang sedang login */}
+        {currentUser && (
+          <div className="text-right">
+            <div className="flex items-center gap-2 justify-end">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                style={{ background: currentUser.role === 'owner' ? '#FFF8EC' : '#D8F3DC', color: currentUser.role === 'owner' ? '#92660A' : '#1B4332' }}>
+                {(currentUser.name || currentUser.username)?.[0]?.toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>{currentUser.name || currentUser.username}</p>
+                <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={currentUser.role === 'owner'
+                    ? { background: '#FFF8EC', color: '#92660A', border: '1px solid #F59E0B' }
+                    : { background: '#D8F3DC', color: '#1B4332', border: '1px solid #c8d8c0' }}>
+                  {currentUser.role === 'owner' ? '👑 Owner' : '🧑‍💼 Kasir'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Status card — semua staff bisa lihat dan toggle */}
@@ -431,7 +474,55 @@ export default function PengaturanPage() {
         </ul>
       </div>
 
-      {/* ── Kelola Akun + Ganti Password — owner only ──────── */}
+      {/* ── Profil Bisnis — owner only ─────────────────────── */}
+      {isOwner && (
+        <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
+          <h2 className="font-bold mb-1" style={{ color: '#1A1A1A' }}>🏪 Profil Bisnis</h2>
+          <p className="text-xs mb-4" style={{ color: '#9CA3AF' }}>
+            Nama bisnis ditampilkan di halaman customer saat scan QR.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: '#1A1A1A' }}>Nama Bisnis *</label>
+              <input
+                type="text"
+                value={bizForm.businessName}
+                onChange={(e) => setBizForm({ ...bizForm, businessName: e.target.value })}
+                placeholder="contoh: Carra Coffee, Warung Bu Sri"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B4332'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Tagline <span className="font-normal">(opsional)</span></label>
+              <input
+                type="text"
+                value={bizForm.businessTagline}
+                onChange={(e) => setBizForm({ ...bizForm, businessTagline: e.target.value })}
+                placeholder="contoh: Kafe spesialti · Nikmati santai"
+                className="w-full border rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B4332'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(101,128,81,0.2)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#E8ECE4'; e.currentTarget.style.boxShadow = 'none'; }}
+              />
+            </div>
+            <button
+              onClick={() => saveBizMutation.mutate({ businessName: bizForm.businessName, businessTagline: bizForm.businessTagline })}
+              disabled={saveBizMutation.isPending || !bizForm.businessName.trim()}
+              className="w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition"
+              style={{ background: '#1B4332' }}
+              onMouseEnter={(e) => !saveBizMutation.isPending && (e.currentTarget.style.backgroundColor = '#2D6A4F')}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1B4332'}
+            >
+              {saveBizMutation.isPending ? 'Menyimpan...' : 'Simpan Profil Bisnis'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Kelola Akun — owner only ──────────────────────── */}
       {isOwner && <>
       <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
         <div className="flex items-center justify-between mb-1">
@@ -611,63 +702,6 @@ export default function PengaturanPage() {
         )}
       </div>
 
-      {/* ── Ganti Password Owner ─────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-bold" style={{ color: '#1A1A1A' }}>🔑 Password Akun Owner</h2>
-            <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Ganti password login akun owner kamu</p>
-          </div>
-          <button
-            onClick={() => setShowChangePw(!showChangePw)}
-            className="text-sm px-3 py-1.5 rounded-xl font-medium border transition"
-            style={{ borderColor: '#E8ECE4', color: '#6B7280' }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F5EFE6'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            {showChangePw ? 'Batal' : 'Ganti Password'}
-          </button>
-        </div>
-        {showChangePw && (
-          <form onSubmit={handleChangePw} className="mt-4 space-y-3">
-            <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Password Sekarang</label>
-              <input type="password" required value={pwForm.currentPassword}
-                onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
-                className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
-                onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Password Baru (min 4 karakter)</label>
-              <input type="password" required value={pwForm.newPassword}
-                onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
-                className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
-                onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Konfirmasi Password Baru</label>
-              <input type="password" required value={pwForm.confirmPassword}
-                onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
-                className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
-                onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
-            </div>
-            <button type="submit" disabled={changePwMutation.isPending}
-              className="w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition"
-              style={{ background: '#1B4332' }}
-              onMouseEnter={(e) => !changePwMutation.isPending && (e.currentTarget.style.backgroundColor = '#2D6A4F')}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1B4332'}>
-              {changePwMutation.isPending ? 'Menyimpan...' : '🔑 Simpan Password Baru'}
-            </button>
-          </form>
-        )}
-      </div>
-
       {/* Modal konfirmasi hapus user */}
       {deleteConfirmUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -693,6 +727,70 @@ export default function PengaturanPage() {
         </div>
       )}
       </>}
+
+      {/* ── Ganti Password — semua user bisa ─────────────── */}
+      <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold" style={{ color: '#1A1A1A' }}>🔑 Ganti Password</h2>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Ganti password akun <strong>@{currentUser?.username}</strong> kamu sendiri</p>
+          </div>
+          <button
+            onClick={() => { setShowChangePw(!showChangePw); setPwForm(EMPTY_PW_FORM); }}
+            className="text-sm px-3 py-1.5 rounded-xl font-medium border transition"
+            style={{ borderColor: '#E8ECE4', color: '#6B7280', backgroundColor: 'transparent' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F5EFE6'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            {showChangePw ? 'Batal' : 'Ganti Password'}
+          </button>
+        </div>
+        {showChangePw && (
+          <form onSubmit={handleChangePw} className="mt-4 space-y-3">
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Password Sekarang</label>
+              <input type="password" required value={pwForm.currentPassword}
+                onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
+                placeholder="Password saat ini"
+                className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
+                onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Password Baru <span className="font-normal">(min 4 karakter)</span></label>
+              <input type="password" required minLength={4} value={pwForm.newPassword}
+                onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
+                placeholder="Password baru"
+                className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
+                onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: '#6B7280' }}>Konfirmasi Password Baru</label>
+              <input type="password" required value={pwForm.confirmPassword}
+                onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
+                placeholder="Ulangi password baru"
+                className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+                style={{ border: '1.5px solid #E8ECE4', color: '#1A1A1A' }}
+                onFocus={(e) => e.currentTarget.style.borderColor = '#1B4332'}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#E8ECE4'} />
+              {pwForm.confirmPassword && pwForm.newPassword !== pwForm.confirmPassword && (
+                <p className="text-xs mt-1" style={{ color: '#DC2626' }}>Password tidak cocok</p>
+              )}
+            </div>
+            <button type="submit"
+              disabled={changePwMutation.isPending || !pwForm.currentPassword || !pwForm.newPassword || pwForm.newPassword !== pwForm.confirmPassword}
+              className="w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition"
+              style={{ background: '#1B4332' }}
+              onMouseEnter={(e) => !changePwMutation.isPending && (e.currentTarget.style.backgroundColor = '#2D6A4F')}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1B4332'}>
+              {changePwMutation.isPending ? 'Menyimpan...' : '🔑 Simpan Password Baru'}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

@@ -133,11 +133,13 @@ model User {
 
 // Pengaturan warung — singleton (id selalu 1)
 model Settings {
-  id           Int      @id @default(1)
-  openTime     String   @default("08:00")   // format "HH:mm"
-  closeTime    String   @default("22:00")   // format "HH:mm"
-  isForceClose Boolean  @default(false)     // tutup paksa (override jam)
-  updatedAt    DateTime @updatedAt
+  id               Int      @id @default(1)
+  businessName     String   @default("Warung Kita")
+  businessTagline  String   @default("Pesan mudah, nikmati santai")
+  openTime         String   @default("08:00")
+  closeTime        String   @default("22:00")
+  isForceClose     Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
 }
 
 model OrderItem {

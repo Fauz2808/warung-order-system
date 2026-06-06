@@ -35,7 +35,7 @@ async function getOrCreateSettings() {
   return prisma.settings.upsert({
     where:  { id: 1 },
     update: {},
-    create: { id: 1, openTime: '08:00', closeTime: '22:00', isForceClose: false },
+    create: { id: 1, businessName: 'Warung Kita', businessTagline: 'Pesan mudah, nikmati santai', openTime: '08:00', closeTime: '22:00', isForceClose: false },
   });
 }
 
@@ -47,9 +47,11 @@ router.get('/', async (req, res) => {
     res.json({
       success: true,
       data: {
-        openTime:     s.openTime,
-        closeTime:    s.closeTime,
-        isForceClose: s.isForceClose,
+        businessName:    s.businessName,
+        businessTagline: s.businessTagline,
+        openTime:        s.openTime,
+        closeTime:       s.closeTime,
+        isForceClose:    s.isForceClose,
         isOpen,
       },
     });
@@ -62,30 +64,37 @@ router.get('/', async (req, res) => {
 // PUT /api/settings — semua staff bisa (kasir & owner)
 router.put('/', authMiddleware, async (req, res) => {
   try {
-    const { openTime, closeTime, isForceClose } = req.body;
+    const { businessName, businessTagline, openTime, closeTime, isForceClose } = req.body;
 
     // Validasi format jam HH:mm
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (openTime  && !timeRegex.test(openTime))  return res.status(400).json({ success: false, message: 'Format jam buka tidak valid (HH:mm)' });
     if (closeTime && !timeRegex.test(closeTime)) return res.status(400).json({ success: false, message: 'Format jam tutup tidak valid (HH:mm)' });
+    if (businessName !== undefined && (typeof businessName !== 'string' || businessName.trim().length < 1)) {
+      return res.status(400).json({ success: false, message: 'Nama bisnis tidak boleh kosong' });
+    }
 
     const updated = await prisma.settings.upsert({
       where:  { id: 1 },
       update: {
-        ...(openTime     !== undefined ? { openTime }     : {}),
-        ...(closeTime    !== undefined ? { closeTime }    : {}),
-        ...(isForceClose !== undefined ? { isForceClose } : {}),
+        ...(businessName    !== undefined ? { businessName: businessName.trim() }       : {}),
+        ...(businessTagline !== undefined ? { businessTagline: businessTagline.trim() } : {}),
+        ...(openTime        !== undefined ? { openTime }                                : {}),
+        ...(closeTime       !== undefined ? { closeTime }                               : {}),
+        ...(isForceClose    !== undefined ? { isForceClose }                            : {}),
       },
       create: {
         id: 1,
-        openTime:     openTime     ?? '08:00',
-        closeTime:    closeTime    ?? '22:00',
-        isForceClose: isForceClose ?? false,
+        businessName:    businessName    ?? 'Warung Kita',
+        businessTagline: businessTagline ?? 'Pesan mudah, nikmati santai',
+        openTime:        openTime        ?? '08:00',
+        closeTime:       closeTime       ?? '22:00',
+        isForceClose:    isForceClose    ?? false,
       },
     });
 
     const isOpen = checkIsOpen(updated.openTime, updated.closeTime, updated.isForceClose);
-    res.json({ success: true, data: { ...updated, isOpen }, message: 'Pengaturan berhasil disimpan' });
+    res.json({ success: true, data: { businessName: updated.businessName, businessTagline: updated.businessTagline, openTime: updated.openTime, closeTime: updated.closeTime, isForceClose: updated.isForceClose, isOpen }, message: 'Pengaturan berhasil disimpan' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Gagal menyimpan pengaturan' });

@@ -76,6 +76,32 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/tables/:id — edit meja (kasir & owner)
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const parsed = tableSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Data tidak valid',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const table = await prisma.table.update({ where: { id }, data: parsed.data });
+    res.json({ success: true, data: table, message: 'Meja berhasil diperbarui' });
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ success: false, message: 'Meja tidak ditemukan' });
+    }
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, message: 'Nomor meja sudah ada' });
+    }
+    res.status(500).json({ success: false, message: 'Gagal memperbarui meja' });
+  }
+});
+
 // DELETE /api/tables/:id — hapus meja (kasir & owner)
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {

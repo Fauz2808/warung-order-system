@@ -42,6 +42,10 @@ export const createTable = (data) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
   return api.post('/tables', data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
 };
+export const updateTable = (id, data) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.put(`/tables/${id}`, data, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
 export const deleteTable = (id) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
   return api.delete(`/tables/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);

@@ -330,7 +330,7 @@ export default function MejaPage() {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: PRIMARY }}>
-              Carra Coffee
+              {shopSettings?.businessName || 'Warung Kita'}
             </p>
             <h1 className="text-3xl font-black" style={{ color: '#1A1A1A', letterSpacing: '-0.5px' }}>
               Meja {table?.number}

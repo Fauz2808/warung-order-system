@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday } from '@/lib/api';
+import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday, getSettings } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
@@ -171,7 +171,7 @@ export default function KasirPage() {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice #${order.dailyNumber || order.id}</title>
 <style>@page{size:58mm auto;margin:2mm 0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;color:#000;width:54mm;padding:2mm}.center{text-align:center}.bold{font-weight:bold}.divider{border-top:1px dashed #999;margin:4px 0}table{width:100%;border-collapse:collapse}td{font-size:11px;vertical-align:top}.total-row td{font-weight:bold;font-size:13px;padding-top:4px}.footer{text-align:center;margin-top:6px;font-size:10px;color:#555}</style>
 </head><body>
-<div class="center" style="margin-bottom:10px"><div class="bold" style="font-size:16px">CARRA COFFEE</div></div>
+<div class="center" style="margin-bottom:10px"><div class="bold" style="font-size:16px">${(shopSettings?.businessName || 'Warung Kita').toUpperCase()}</div></div>
 <div class="divider"></div>
 <table style="margin-bottom:8px">
 <tr><td style="color:#555">Invoice</td><td style="text-align:right">#${order.dailyNumber || order.id}</td></tr>
@@ -185,7 +185,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
 <div class="divider"></div>
 <table><tr class="total-row"><td>TOTAL</td><td style="text-align:right">${fmt(order.totalAmount)}</td></tr></table>
 <div class="divider"></div>
-<div class="footer"><div>Terima kasih telah berkunjung!</div><div>— Carra Coffee —</div></div>
+<div class="footer"><div>Terima kasih telah berkunjung!</div><div>— ${shopSettings?.businessName || 'Warung Kita'} —</div></div>
 </body></html>`;
       const iframe = document.createElement('iframe');
       iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
@@ -323,6 +323,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     refetchInterval: 60000,
     enabled: !loading,
   });
+  const { data: shopSettings } = useQuery({ queryKey: ['settings'], queryFn: getSettings, enabled: !loading });
   const lowStockItems = menuItems.filter(
     (m) => m.stock !== null && m.stock <= 3 && m.isAvailable
   );
@@ -717,7 +718,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       />
     )}
     {invoiceOrder && (
-      <InvoiceModal order={invoiceOrder} onClose={() => setInvoiceOrder(null)} />
+      <InvoiceModal order={invoiceOrder} onClose={() => setInvoiceOrder(null)} businessName={shopSettings?.businessName} />
     )}
     {editOrder && (
       <EditOrderModal
@@ -1375,7 +1376,7 @@ function QuickPayModal({ order, onConfirm, onClose, isPending }) {
 }
 
 // ─── InvoiceModal ─────────────────────────────────────
-function InvoiceModal({ order, onClose }) {
+function InvoiceModal({ order, onClose, businessName }) {
   const fmt = (n) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
@@ -1404,7 +1405,7 @@ function InvoiceModal({ order, onClose }) {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Invoice #${order.dailyNumber || order.id} — Carra Coffee</title>
+  <title>Invoice #${order.dailyNumber || order.id} — ${businessName || 'Warung Kita'}</title>
   <style>
     @page {
       size: 58mm auto;
@@ -1433,7 +1434,7 @@ function InvoiceModal({ order, onClose }) {
 </head>
 <body>
   <div class="center" style="margin-bottom:10px">
-    <div class="bold" style="font-size:16px">CARRA COFFEE</div>
+    <div class="bold" style="font-size:16px">${(businessName || 'Warung Kita').toUpperCase()}</div>
   </div>
   <div class="divider"></div>
   <table style="margin-bottom:8px">
@@ -1459,7 +1460,7 @@ function InvoiceModal({ order, onClose }) {
   <div class="divider"></div>
   <div class="footer">
     <div>Terima kasih telah berkunjung!</div>
-    <div>— Carra Coffee —</div>
+    <div>— ${businessName || 'Warung Kita'} —</div>
   </div>
 
   <div class="no-print" style="margin-top:20px;text-align:center">
@@ -1599,7 +1600,7 @@ function InvoiceModal({ order, onClose }) {
 
           {/* Footer struk */}
           <div className="text-center py-2 border-t border-dashed" style={{ borderColor: '#E8ECE4' }}>
-            <p className="text-xs font-semibold" style={{ color: '#1B4332' }}>☕ Carra Coffee</p>
+            <p className="text-xs font-semibold" style={{ color: '#1B4332' }}>☕ {businessName || 'Warung Kita'}</p>
             <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Terima kasih telah berkunjung!</p>
           </div>
         </div>
