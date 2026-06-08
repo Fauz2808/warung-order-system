@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
+import { getSettings } from '@/lib/api';
 import {
   ClipboardText,
   ForkKnife,
@@ -38,6 +40,9 @@ export default function StaffLayout({ children }) {
   useEffect(() => { setMounted(true); }, []);
 
   // Auth-dependent values — kosong di server, terisi setelah client mount
+  const { data: shopSettings } = useQuery({ queryKey: ['settings'], queryFn: getSettings, staleTime: 60000 });
+  const businessName = shopSettings?.businessName || 'Warung Kita';
+
   const displayName    = mounted ? (user?.name || user?.username || 'Staff') : '';
   const displayInitial = mounted ? (user?.username?.[0]?.toUpperCase() || '') : '';
   const displayRole    = mounted ? (user?.role === 'owner' ? 'Owner' : 'Kasir') : '';
@@ -76,7 +81,7 @@ export default function StaffLayout({ children }) {
           {!collapsed && (
             <div className="overflow-hidden flex-1">
               <p className="text-sm font-semibold whitespace-nowrap" style={{ color: '#1B4332', letterSpacing: '0.02em' }}>
-                Carra Coffee
+                {businessName}
               </p>
               <p className="text-xs whitespace-nowrap" style={{ color: '#9CA3AF' }}>
                 Staff Panel
@@ -226,7 +231,7 @@ export default function StaffLayout({ children }) {
                 <span className="font-medium text-sm" style={{ color: '#1A1A1A' }}>{active.label}</span>
               </div>
             ) : (
-              <span className="font-medium text-sm" style={{ color: '#1A1A1A' }}>Carra Coffee</span>
+              <span className="font-medium text-sm" style={{ color: '#1A1A1A' }}>{businessName}</span>
             );
           })()}
           <div className="ml-auto">
