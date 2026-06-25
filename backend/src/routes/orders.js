@@ -34,6 +34,7 @@ const updateStatusSchema = z.object({
   status: z.enum(['pending', 'preparing', 'done', 'cancelled'], {
     errorMap: () => ({ message: 'Status tidak valid' }),
   }),
+  paymentLocation: z.enum(['kasir', 'meja']).optional(),
 });
 
 // GET /api/orders — ambil order hari ini (WIB) untuk kasir/dapur
@@ -322,9 +323,14 @@ router.put('/:id/status', async (req, res) => {
       });
     }
 
+    const updateData = { status: parsed.data.status };
+    if (parsed.data.paymentLocation !== undefined) {
+      updateData.paymentLocation = parsed.data.paymentLocation;
+    }
+
     const order = await prisma.order.update({
       where: { id },
-      data: { status: parsed.data.status },
+      data: updateData,
       include: { table: true, items: { include: { menu: true, modifiers: true } } },
     });
 

@@ -112,8 +112,9 @@ model Order {
   totalAmount  Int         // total harga dalam Rupiah
   notes        String?     // catatan tambahan dari customer
   customerName String?     // nama customer, opsional (diisi kasir)
-  isPaid         Boolean     @default(false)  // false = belum bayar, true = sudah lunas
-  paymentMethod  String      @default("cash")  // "cash" | "qris" | "split"
+  isPaid           Boolean     @default(false)  // false = belum bayar, true = sudah lunas
+  paymentMethod    String      @default("cash")  // "cash" | "qris" | "split"
+  paymentLocation  String?     // "kasir" | "meja" — ditentukan kasir saat selesaikan order
   createdAt      DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   items        OrderItem[]

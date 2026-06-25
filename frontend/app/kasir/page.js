@@ -285,11 +285,12 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
 
   // Update status order
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }) => updateOrderStatus(id, status),
-    onSuccess: (_, { id, dailyNumber, status }) => {
+    mutationFn: ({ id, status, paymentLocation }) => updateOrderStatus(id, status, paymentLocation),
+    onSuccess: (_, { id, dailyNumber, status, paymentLocation }) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       const label = STATUS_CONFIG[status]?.label || status;
-      toast.success(`Order #${dailyNumber || id} → ${label}`);
+      const locLabel = paymentLocation === 'meja' ? ' · Bayar di Meja' : paymentLocation === 'kasir' ? ' · Bayar di Kasir' : '';
+      toast.success(`Order #${dailyNumber || id} → ${label}${locLabel}`);
     },
     onError: () => toast.error('Gagal mengubah status'),
   });
@@ -662,7 +663,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             <OrderCard
               key={order.id}
               order={order}
-              onUpdateStatus={(status) => statusMutation.mutate({ id: order.id, dailyNumber: order.dailyNumber, status })}
+              onUpdateStatus={(status, paymentLocation) => statusMutation.mutate({ id: order.id, dailyNumber: order.dailyNumber, status, paymentLocation })}
               isUpdating={statusMutation.isPending}
               isSelected={selectedIds.has(order.id)}
               onToggleSelect={(id) => setSelectedIds((prev) => {
@@ -753,14 +754,15 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const nextStatus = cfg.next;
   const isActive = ['pending', 'preparing'].includes(order.status);
 
-  const handleStatusUpdate = (status) => {
+  const handleStatusUpdate = (status, paymentLocation) => {
     if (animatingSuccess || isUpdating) return;
     setAnimatingSuccess(true);
-    setTimeout(() => onUpdateStatus(status), 450);
+    setTimeout(() => onUpdateStatus(status, paymentLocation), 450);
   };
 
+  // Swipe dinonaktifkan untuk "done" karena butuh pilih lokasi bayar
   const handleTouchStart = (e) => {
-    if (!nextStatus || isUpdating || animatingSuccess) return;
+    if (!nextStatus || nextStatus === 'done' || isUpdating || animatingSuccess) return;
     touchStartX.current = e.touches[0].clientX;
     setIsSwiping(true);
   };
@@ -770,7 +772,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
     setSwipeX(Math.max(-80, Math.min(80, dx)));
   };
   const handleTouchEnd = () => {
-    if (Math.abs(swipeX) >= 60 && nextStatus) handleStatusUpdate(nextStatus);
+    if (Math.abs(swipeX) >= 60 && nextStatus && nextStatus !== 'done') handleStatusUpdate(nextStatus);
     setSwipeX(0);
     setIsSwiping(false);
     touchStartX.current = null;
@@ -781,7 +783,7 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
   const isWarning = isActive && waitMins >= 5 && waitMins < 10;
 
   const swipeTriggered = Math.abs(swipeX) >= 60;
-  const swipeLabel = nextStatus === 'preparing' ? 'Proses' : nextStatus === 'done' ? 'Selesai' : null;
+  const swipeLabel = nextStatus === 'preparing' ? 'Proses' : null;
 
   // Left accent color
   const accentColor = order.status === 'pending'
@@ -1018,11 +1020,21 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
               </button>
             </div>
 
-            <div className="flex-1 flex items-center justify-end gap-2">
+            <div className="flex-1 flex items-center justify-end gap-2 flex-wrap">
               {order.status === 'done' && (
-                <span className="text-xs font-medium" style={{ color: '#16A34A' }}>
-                  Selesai · {formatTime(order.updatedAt)}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium" style={{ color: '#16A34A' }}>
+                    Selesai · {formatTime(order.updatedAt)}
+                  </span>
+                  {order.paymentLocation && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={order.paymentLocation === 'kasir'
+                        ? { background: '#D8F3DC', color: '#1B4332' }
+                        : { background: '#EDE9FE', color: '#7C3AED' }}>
+                      {order.paymentLocation === 'kasir' ? '🏪 Kasir' : '🙋 Di Meja'}
+                    </span>
+                  )}
+                </div>
               )}
               {order.status === 'cancelled' && (
                 <span className="text-xs" style={{ color: '#9CA3AF' }}>Dibatalkan</span>
@@ -1038,14 +1050,41 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
                   Batal
                 </button>
               )}
-              {nextStatus && (
+              {/* Proses → single button */}
+              {nextStatus && nextStatus !== 'done' && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleStatusUpdate(nextStatus); }}
                   disabled={isUpdating || animatingSuccess}
                   className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition disabled:opacity-50 active:scale-95"
-                  style={{ background: animatingSuccess ? '#16A34A' : nextStatus === 'done' ? '#1B4332' : '#2563EB' }}>
-                  {animatingSuccess ? 'Berhasil' : nextStatus === 'done' ? 'Selesai' : 'Proses →'}
+                  style={{ background: animatingSuccess ? '#16A34A' : '#2563EB' }}>
+                  {animatingSuccess ? 'Berhasil' : 'Proses →'}
                 </button>
+              )}
+              {/* Selesai → 2 tombol pilih lokasi bayar */}
+              {nextStatus === 'done' && !animatingSuccess && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleStatusUpdate('done', 'kasir'); }}
+                    disabled={isUpdating || animatingSuccess}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition disabled:opacity-50 active:scale-95"
+                    style={{ background: '#1B4332' }}
+                    title="Customer bayar di kasir">
+                    🏪 Kasir
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleStatusUpdate('done', 'meja'); }}
+                    disabled={isUpdating || animatingSuccess}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition disabled:opacity-50 active:scale-95"
+                    style={{ background: '#7C3AED' }}
+                    title="Staff ambil pembayaran di meja">
+                    🙋 Di Meja
+                  </button>
+                </>
+              )}
+              {nextStatus === 'done' && animatingSuccess && (
+                <span className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: '#16A34A' }}>
+                  Berhasil
+                </span>
               )}
             </div>
           </div>
