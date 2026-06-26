@@ -111,6 +111,7 @@ export default function MejaPage() {
       tableId: table?.id ?? tableId,
       orderType,
       customerName: customerName.trim() || undefined,
+      paymentLocation: selectedPayLoc || undefined,
       items: items.map((i) => ({
         menuId: i.menuId,
         quantity: i.quantity,
@@ -313,37 +314,21 @@ export default function MejaPage() {
             </>
           ) : (
             <div className="space-y-3">
-              {/* Pilih cara bayar */}
-              <div className="rounded-2xl p-4" style={{ background: '#F5EFE6' }}>
-                <p className="text-xs font-semibold mb-3 text-center" style={{ color: '#6B7280' }}>
-                  Mau bayar di mana?
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { loc: 'kasir', icon: '🏪', label: 'Bayar di Kasir', desc: 'Kamu yang ke kasir' },
-                    { loc: 'meja',  icon: '🙋', label: 'Bayar di Meja',  desc: 'Kami yang ke mejamu' },
-                  ].map(({ loc, icon, label, desc }) => {
-                    const active = (selectedPayLoc || liveOrder?.paymentLocation) === loc;
-                    return (
-                      <button
-                        key={loc}
-                        onClick={() => payLocMutation.mutate({ id: orderSuccess.id, loc })}
-                        disabled={payLocMutation.isPending}
-                        className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition active:scale-95 disabled:opacity-60"
-                        style={active
-                          ? { borderColor: PRIMARY, background: PRIMARY_LIGHT }
-                          : { borderColor: '#E8ECE4', background: '#fff' }}
-                      >
-                        <span className="text-xl">{icon}</span>
-                        <span className="text-xs font-semibold leading-tight text-center" style={{ color: active ? PRIMARY : '#1A1A1A' }}>{label}</span>
-                        <span className="text-xs leading-tight text-center" style={{ color: '#9CA3AF' }}>{desc}</span>
-                        {active && <span className="text-xs font-bold mt-0.5" style={{ color: PRIMARY }}>✓ Dipilih</span>}
-                      </button>
-                    );
-                  })}
+              {/* Konfirmasi lokasi bayar yang dipilih */}
+              {(selectedPayLoc || liveOrder?.paymentLocation) && (
+                <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
+                  style={{ background: (selectedPayLoc || liveOrder?.paymentLocation) === 'meja' ? '#EDE9FE' : PRIMARY_LIGHT }}>
+                  <span className="text-xl">{(selectedPayLoc || liveOrder?.paymentLocation) === 'meja' ? '🙋' : '🏪'}</span>
+                  <div>
+                    <p className="text-xs font-semibold"
+                      style={{ color: (selectedPayLoc || liveOrder?.paymentLocation) === 'meja' ? '#7C3AED' : PRIMARY }}>
+                      {(selectedPayLoc || liveOrder?.paymentLocation) === 'meja'
+                        ? 'Bayar di Meja — kami akan ke mejamu'
+                        : 'Bayar di Kasir — silakan ke kasir saat pesanan siap'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-
+              )}
               <p className="text-center text-xs py-1" style={{ color: '#9CA3AF' }}>
                 Mohon tunggu, kami sedang menyiapkan pesananmu ☕
                 <br />
@@ -531,6 +516,8 @@ export default function MejaPage() {
           setOrderType={setOrderType}
           customerName={customerName}
           setCustomerName={setCustomerName}
+          paymentLoc={selectedPayLoc}
+          setPaymentLoc={setSelectedPayLoc}
         />
       )}
     </div>
@@ -907,7 +894,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
 }
 
 // ─── CartModal ────────────────────────────────────────
-function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChange, loading, menu, orderType, setOrderType, customerName, setCustomerName }) {
+function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChange, loading, menu, orderType, setOrderType, customerName, setCustomerName, paymentLoc, setPaymentLoc }) {
   return (
     <div className="fixed inset-0 z-30 flex items-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -947,6 +934,34 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
                     }}
                   >
                     <span>{opt.emoji}</span> {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cara Bayar */}
+          <div style={{ borderTop: '1px solid #F0F0EC', paddingTop: '1rem' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Cara Bayar</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'kasir', label: 'Bayar di Kasir', emoji: '🏪', desc: 'Kamu yang ke kasir' },
+                { value: 'meja',  label: 'Bayar di Meja',  emoji: '🙋', desc: 'Kami yang ke mejamu' },
+              ].map((opt) => {
+                const isActive = paymentLoc === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPaymentLoc(opt.value)}
+                    className="flex flex-col items-center gap-0.5 py-3 rounded-xl border-2 transition"
+                    style={{
+                      borderColor: isActive ? PRIMARY : '#E8ECE4',
+                      background:  isActive ? PRIMARY_LIGHT : 'transparent',
+                    }}
+                  >
+                    <span className="text-xl">{opt.emoji}</span>
+                    <span className="text-xs font-semibold" style={{ color: isActive ? PRIMARY : '#1A1A1A' }}>{opt.label}</span>
+                    <span className="text-xs" style={{ color: '#9CA3AF' }}>{opt.desc}</span>
                   </button>
                 );
               })}

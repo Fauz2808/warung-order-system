@@ -10,12 +10,13 @@ const router = express.Router();
 
 // Validasi order baru dari customer
 const createOrderSchema = z.object({
-  tableId:       z.number().int().positive('tableId wajib diisi'),
-  orderType:     z.enum(['dine-in', 'take-away']).default('dine-in'),
-  notes:         z.string().optional(),
-  customerName:  z.string().optional(),
-  isPaid:        z.boolean().default(false),
-  paymentMethod: z.enum(['cash', 'qris']).default('cash'),
+  tableId:         z.number().int().positive('tableId wajib diisi'),
+  orderType:       z.enum(['dine-in', 'take-away']).default('dine-in'),
+  notes:           z.string().optional(),
+  customerName:    z.string().optional(),
+  isPaid:          z.boolean().default(false),
+  paymentMethod:   z.enum(['cash', 'qris']).default('cash'),
+  paymentLocation: z.enum(['kasir', 'meja']).optional(),
   items: z
     .array(
       z.object({
@@ -117,7 +118,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { tableId, orderType, notes, customerName, isPaid, paymentMethod, items } = parsed.data;
+    const { tableId, orderType, notes, customerName, isPaid, paymentMethod, paymentLocation, items } = parsed.data;
 
     // Cek jam operasional warung
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
@@ -226,6 +227,7 @@ router.post('/', async (req, res) => {
           customerName: customerName || null,
           isPaid,
           paymentMethod: isPaid ? (paymentMethod || 'cash') : 'cash',
+          paymentLocation: paymentLocation || null,
           totalAmount,
           items: {
             create: items.map((item) => ({
