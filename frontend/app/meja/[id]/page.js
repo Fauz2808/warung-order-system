@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getTable, getMenu, createOrder, getSettings, getOrderById } from '@/lib/api';
+import { getTable, getMenu, createOrder, getSettings, getOrderById, setPaymentLocation } from '@/lib/api';
 import useCartStore from '@/store/cartStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSocket } from '@/lib/socket';
@@ -36,6 +36,7 @@ export default function MejaPage() {
   const [orderType, setOrderType] = useState('dine-in');
   const [customerName, setCustomerName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPayLoc, setSelectedPayLoc] = useState(null);
 
   const { items, addItem, removeItem, updateTemperature, getTotal, getTotalItems, clearCart, setTable } = useCartStore();
   const queryClient = useQueryClient();
@@ -85,6 +86,15 @@ export default function MejaPage() {
       const msg = err.response?.data?.message || 'Gagal mengirim pesanan. Coba lagi.';
       toast.error(msg);
     },
+  });
+
+  const payLocMutation = useMutation({
+    mutationFn: ({ id, loc }) => setPaymentLocation(id, loc),
+    onSuccess: (_, { loc }) => {
+      setSelectedPayLoc(loc);
+      toast.success(loc === 'kasir' ? 'Oke, bayar di kasir ya!' : 'Siap, kami akan ke meja kamu!', { duration: 2500 });
+    },
+    onError: () => toast.error('Gagal menyimpan pilihan, coba lagi'),
   });
 
   const { data: liveOrder } = useQuery({
@@ -303,6 +313,37 @@ export default function MejaPage() {
             </>
           ) : (
             <div className="space-y-3">
+              {/* Pilih cara bayar */}
+              <div className="rounded-2xl p-4" style={{ background: '#F5EFE6' }}>
+                <p className="text-xs font-semibold mb-3 text-center" style={{ color: '#6B7280' }}>
+                  Mau bayar di mana?
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { loc: 'kasir', icon: '🏪', label: 'Bayar di Kasir', desc: 'Kamu yang ke kasir' },
+                    { loc: 'meja',  icon: '🙋', label: 'Bayar di Meja',  desc: 'Kami yang ke mejamu' },
+                  ].map(({ loc, icon, label, desc }) => {
+                    const active = (selectedPayLoc || liveOrder?.paymentLocation) === loc;
+                    return (
+                      <button
+                        key={loc}
+                        onClick={() => payLocMutation.mutate({ id: orderSuccess.id, loc })}
+                        disabled={payLocMutation.isPending}
+                        className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 transition active:scale-95 disabled:opacity-60"
+                        style={active
+                          ? { borderColor: PRIMARY, background: PRIMARY_LIGHT }
+                          : { borderColor: '#E8ECE4', background: '#fff' }}
+                      >
+                        <span className="text-xl">{icon}</span>
+                        <span className="text-xs font-semibold leading-tight text-center" style={{ color: active ? PRIMARY : '#1A1A1A' }}>{label}</span>
+                        <span className="text-xs leading-tight text-center" style={{ color: '#9CA3AF' }}>{desc}</span>
+                        {active && <span className="text-xs font-bold mt-0.5" style={{ color: PRIMARY }}>✓ Dipilih</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <p className="text-center text-xs py-1" style={{ color: '#9CA3AF' }}>
                 Mohon tunggu, kami sedang menyiapkan pesananmu ☕
                 <br />

@@ -67,6 +67,8 @@ export const bulkUpdateStatus = (ids, status) =>
   api.put('/orders/bulk-status', { ids, status }).then((r) => r.data);
 export const markOrderPaid = (id, notes, paymentMethod = 'cash', cashAmount, qrisAmount) =>
   api.patch(`/orders/${id}/mark-paid`, { notes, paymentMethod, cashAmount, qrisAmount }).then((r) => r.data);
+export const setPaymentLocation = (id, paymentLocation) =>
+  api.patch(`/orders/${id}/payment-location`, { paymentLocation }).then((r) => r.data);
 export const editOrderItems = (id, items) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
   return api.put(`/orders/${id}/items`, { items }, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);

@@ -361,6 +361,38 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// PATCH /api/orders/:id/payment-location — customer pilih lokasi bayar (no auth)
+router.patch('/:id/payment-location', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { paymentLocation } = req.body;
+
+    if (!['kasir', 'meja'].includes(paymentLocation)) {
+      return res.status(400).json({ success: false, message: 'paymentLocation harus "kasir" atau "meja"' });
+    }
+
+    const existing = await prisma.order.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ success: false, message: 'Order tidak ditemukan' });
+    if (existing.status === 'done' || existing.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'Order sudah selesai atau dibatalkan' });
+    }
+
+    const order = await prisma.order.update({
+      where: { id },
+      data: { paymentLocation },
+      include: { table: true, items: { include: { menu: true, modifiers: true } } },
+    });
+
+    if (req.io) {
+      req.io.emit('order:status_update', { orderId: id, status: order.status, order });
+    }
+
+    res.json({ success: true, data: order, message: 'Lokasi bayar berhasil disimpan' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Gagal menyimpan lokasi bayar' });
+  }
+});
+
 // PATCH /api/orders/:id/mark-paid — tandai order sudah lunas (kasir)
 // Body: { notes: "...", paymentMethod: "cash" | "qris" | "split", cashAmount?: number, qrisAmount?: number }
 router.patch('/:id/mark-paid', async (req, res) => {
