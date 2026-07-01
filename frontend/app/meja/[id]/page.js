@@ -686,6 +686,8 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
   }[item.category] ?? '☕';
   const canConfirm = (!needsTemp || selectedTemp !== null) && requiredGroupsMet;
   const quickNotes = ['Less sugar', 'Less ice', 'No ice', 'Extra sweet', 'No sugar'];
+  // Feature flag: chips quick-note. Client minta di-hide dulu; set true untuk munculkan lagi.
+  const SHOW_QUICK_NOTE_CHIPS = false;
 
   // Harga total dengan modifier
   const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -830,27 +832,29 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
             <p className="text-sm font-semibold mb-2" style={{ color: '#1A1A1A' }}>
               Catatan <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>(opsional)</span>
             </p>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {quickNotes.map((chip) => {
-                const active = selectedChips.includes(chip);
-                const disabled = isHot && ICE_CHIPS.includes(chip);
-                return (
-                  <button
-                    key={chip}
-                    onClick={() => toggleChip(chip)}
-                    disabled={disabled}
-                    className="px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition active:scale-95"
-                    style={disabled
-                      ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', cursor: 'not-allowed', textDecoration: 'line-through' }
-                      : active
-                      ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
-                      : { background: '#FAFAF8', color: '#6B7280', borderColor: '#E8ECE4' }}
-                  >
-                    {disabled ? chip : active ? `✓ ${chip}` : `+ ${chip}`}
-                  </button>
-                );
-              })}
-            </div>
+            {SHOW_QUICK_NOTE_CHIPS && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {quickNotes.map((chip) => {
+                  const active = selectedChips.includes(chip);
+                  const disabled = isHot && ICE_CHIPS.includes(chip);
+                  return (
+                    <button
+                      key={chip}
+                      onClick={() => toggleChip(chip)}
+                      disabled={disabled}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition active:scale-95"
+                      style={disabled
+                        ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', cursor: 'not-allowed', textDecoration: 'line-through' }
+                        : active
+                        ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
+                        : { background: '#FAFAF8', color: '#6B7280', borderColor: '#E8ECE4' }}
+                    >
+                      {disabled ? chip : active ? `✓ ${chip}` : `+ ${chip}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <textarea
               value={customNote}
               onChange={(e) => setCustomNote(e.target.value)}

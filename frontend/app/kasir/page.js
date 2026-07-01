@@ -1886,6 +1886,8 @@ function EditAddItemModal({ item, onConfirm, onClose }) {
 
   const notes = [chips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
   const quickNotes = ['Less sugar', 'Less ice', 'No ice', 'Extra sweet', 'No sugar'];
+  // Feature flag: chips quick-note. Client minta di-hide dulu; set true untuk munculkan lagi.
+  const SHOW_QUICK_NOTE_CHIPS = false;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end">
@@ -1938,21 +1940,23 @@ function EditAddItemModal({ item, onConfirm, onClose }) {
 
           <div className="mb-2">
             <p className="text-sm font-semibold mb-2" style={{ color: '#1A1A1A' }}>Catatan</p>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {quickNotes.map((chip) => {
-                const active = chips.includes(chip);
-                const disabled = isHot && ICE_CHIPS.includes(chip);
-                return (
-                  <button key={chip} onClick={() => toggleChip(chip)} disabled={disabled}
-                    className="px-3 py-1 rounded-full text-xs font-semibold border-2 transition"
-                    style={disabled ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', textDecoration: 'line-through' }
-                      : active ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
-                      : { background: '#FAFAF8', color: '#6B7280', borderColor: '#E8ECE4' }}>
-                    {active ? `✓ ${chip}` : `+ ${chip}`}
-                  </button>
-                );
-              })}
-            </div>
+            {SHOW_QUICK_NOTE_CHIPS && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {quickNotes.map((chip) => {
+                  const active = chips.includes(chip);
+                  const disabled = isHot && ICE_CHIPS.includes(chip);
+                  return (
+                    <button key={chip} onClick={() => toggleChip(chip)} disabled={disabled}
+                      className="px-3 py-1 rounded-full text-xs font-semibold border-2 transition"
+                      style={disabled ? { background: '#F3F4F6', color: '#C4C9BD', borderColor: '#E5E7EB', textDecoration: 'line-through' }
+                        : active ? { background: '#D8F3DC', color: '#1B4332', borderColor: '#1B4332' }
+                        : { background: '#FAFAF8', color: '#6B7280', borderColor: '#E8ECE4' }}>
+                      {active ? `✓ ${chip}` : `+ ${chip}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <input type="text" value={customNote} onChange={(e) => setCustomNote(e.target.value)}
               placeholder="Catatan lain..." className="w-full rounded-xl px-3 py-2 text-sm outline-none border"
               style={{ border: '1.5px solid #E8ECE4' }} />
