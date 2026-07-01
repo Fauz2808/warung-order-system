@@ -152,7 +152,8 @@ router.post('/', async (req, res) => {
     }
 
     // Ambil harga menu saat ini (snapshot)
-    const menuIds = items.map((i) => i.menuId);
+    // Dedup: satu menu bisa muncul beberapa kali di cart (mis. Ice + Hot, atau qty terpisah karena ada opsi)
+    const menuIds = [...new Set(items.map((i) => i.menuId))];
     const menus = await prisma.menu.findMany({
       where: { id: { in: menuIds }, isAvailable: true },
     });
