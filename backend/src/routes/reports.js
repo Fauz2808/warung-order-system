@@ -246,8 +246,8 @@ router.get('/export', async (req, res) => {
         rows.push([
           no++,
           order.id,
-          new Date(order.createdAt).toLocaleDateString('id-ID'),
-          new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          new Date(order.createdAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }),
+          new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }),
           order.table?.number || '-',
           order.table?.floor || '-',
           order.orderType === 'take-away' ? 'Take Away' : 'Dine In',
@@ -262,8 +262,8 @@ router.get('/export', async (req, res) => {
           rows.push([
             idx === 0 ? no++ : '',
             idx === 0 ? order.id : '',
-            idx === 0 ? new Date(order.createdAt).toLocaleDateString('id-ID') : '',
-            idx === 0 ? new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '',
+            idx === 0 ? new Date(order.createdAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }) : '',
+            idx === 0 ? new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) : '',
             idx === 0 ? (order.table?.number || '-') : '',
             idx === 0 ? (order.table?.floor  || '-') : '',
             idx === 0 ? (order.orderType === 'take-away' ? 'Take Away' : 'Dine In') : '',
