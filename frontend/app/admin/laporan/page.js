@@ -68,10 +68,14 @@ export default function LaporanPage() {
   const doneOrders      = useMemo(() => todayOrders.filter((o) => o.status === 'done'), [todayOrders]);
 
   // Preset tanggal untuk export
-  const setPreset = (days) => {
-    const end   = new Date();
+  const setPreset = ({ days, monthToDate }) => {
+    const end = new Date();
     const start = new Date();
-    start.setDate(start.getDate() - (days - 1));
+    if (monthToDate) {
+      start.setDate(1); // mulai tanggal 1 bulan berjalan
+    } else {
+      start.setDate(start.getDate() - (days - 1));
+    }
     setExportStart(toDateInput(start));
     setExportEnd(toDateInput(end));
   };
@@ -119,11 +123,11 @@ export default function LaporanPage() {
           {/* Preset segmented control */}
           <div className="flex items-center p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
             {[
-              { label: 'Hari ini', days: 1 },
-              { label: '7 hari',   days: 7 },
-              { label: '30 hari',  days: 30 },
+              { label: 'Hari ini',  days: 1 },
+              { label: '7 hari',    days: 7 },
+              { label: 'Bulan ini', monthToDate: true },
             ].map((p) => (
-              <button key={p.days} onClick={() => setPreset(p.days)}
+              <button key={p.label} onClick={() => setPreset(p)}
                 className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
                 style={{ color: '#6B7280', fontWeight: 400 }}>
                 {p.label}
@@ -274,7 +278,7 @@ export default function LaporanPage() {
                   ? { background: '#FFFFFF', color: '#1A1A1A', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
                   : { color: '#6B7280', fontWeight: 400 }
                 }>
-                {r} hari
+                {r === 7 ? '7 hari' : 'Bulan ini'}
               </button>
             ))}
           </div>
@@ -389,7 +393,7 @@ export default function LaporanPage() {
       {/* Grafik jumlah order harian */}
       <div className="bg-white rounded-2xl border shadow-sm p-5">
         <h2 className="font-bold text-gray-800 mb-1">📈 Jumlah Order Harian</h2>
-        <p className="text-xs text-gray-400 mb-5">Tren order dalam {chartRange} hari terakhir</p>
+        <p className="text-xs text-gray-400 mb-5">{chartRange === 7 ? 'Tren order dalam 7 hari terakhir' : 'Tren order bulan ini'}</p>
 
         {loadingChart ? (
           <div className="h-40 flex items-center justify-center text-gray-400">Memuat...</div>

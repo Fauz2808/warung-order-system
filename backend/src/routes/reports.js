@@ -34,16 +34,18 @@ function getLast7Days() {
   return days;
 }
 
-// Helper — ambil 30 hari terakhir
-function getLast30Days() {
+// Helper — ambil hari-hari di bulan berjalan, mulai tanggal 1 sampai hari ini
+function getCurrentMonthDays() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+  const today = now.getDate();
   const days = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+  for (let d = 1; d <= today; d++) {
     days.push({
-      label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-      start: new Date(new Date(d).setHours(0, 0, 0, 0)),
-      end:   new Date(new Date(d).setHours(23, 59, 59, 999)),
+      label: new Date(year, month, d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+      start: new Date(year, month, d, 0, 0, 0, 0),
+      end:   new Date(year, month, d, 23, 59, 59, 999),
     });
   }
   return days;
@@ -99,8 +101,8 @@ router.get('/summary', async (req, res) => {
 // GET /api/reports/chart?range=7 atau ?range=30
 router.get('/chart', async (req, res) => {
   try {
-    const range = req.query.range === '30' ? 30 : 7;
-    const days = range === 7 ? getLast7Days() : getLast30Days();
+    // range=30 -> bulan berjalan (mulai tanggal 1), selain itu 7 hari terakhir
+    const days = req.query.range === '30' ? getCurrentMonthDays() : getLast7Days();
 
     // Query semua order done dalam rentang waktu sekaligus
     const startDate = days[0].start;
