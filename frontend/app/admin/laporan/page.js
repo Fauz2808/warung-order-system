@@ -10,9 +10,15 @@ import {
 } from 'recharts';
 import toast from 'react-hot-toast';
 import { getSummary, getChart, getTopMenu, getHourly, exportReport, getOrders } from '@/lib/api';
+import DateRangePicker, { presetValue, fmtRangeLabel } from '@/components/DateRangePicker';
 
-// Format YYYY-MM-DD untuk input date
-const toDateInput = (date) => date.toISOString().split('T')[0];
+// Format YYYY-MM-DD (waktu lokal) untuk input date
+const toDateInput = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 const today = new Date();
 
 const formatRupiah = (n) =>
@@ -29,43 +35,46 @@ const ORANGE_LIGHT = '#fed7aa';
 const CATEGORY_COLORS = { makanan: '#f97316', minuman: '#3b82f6' };
 
 export default function LaporanPage() {
-  const [chartRange, setChartRange] = useState(7);
+  // Filter tanggal global — mengontrol seluruh halaman (default: bulan ini)
+  const [range, setRange] = useState(() => presetValue('thisMonth'));
+  const { startStr, endStr } = range;
+
   const [exportStart, setExportStart] = useState(toDateInput(today));
   const [exportEnd,   setExportEnd]   = useState(toDateInput(today));
   const [exporting,   setExporting]   = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
-    queryKey: ['summary'],
-    queryFn: getSummary,
+    queryKey: ['summary', startStr, endStr],
+    queryFn: () => getSummary(startStr, endStr),
     refetchInterval: 60000,
   });
 
   const { data: chartData = [], isLoading: loadingChart } = useQuery({
-    queryKey: ['chart', chartRange],
-    queryFn: () => getChart(chartRange),
+    queryKey: ['chart', startStr, endStr],
+    queryFn: () => getChart(startStr, endStr),
   });
 
   const { data: topMenu = [], isLoading: loadingTop } = useQuery({
-    queryKey: ['top-menu'],
-    queryFn: getTopMenu,
+    queryKey: ['top-menu', startStr, endStr],
+    queryFn: () => getTopMenu(startStr, endStr),
     refetchInterval: 60000,
   });
 
   const { data: hourly = [], isLoading: loadingHourly } = useQuery({
-    queryKey: ['hourly'],
-    queryFn: getHourly,
+    queryKey: ['hourly', startStr, endStr],
+    queryFn: () => getHourly(startStr, endStr),
     refetchInterval: 60000,
   });
 
-  const { data: todayOrders = [], isLoading: loadingOrders } = useQuery({
-    queryKey: ['orders-history-today'],
-    queryFn: () => getOrders({}),
+  const { data: rangeOrders = [], isLoading: loadingOrders } = useQuery({
+    queryKey: ['orders-history', startStr, endStr],
+    queryFn: () => getOrders({ start: startStr, end: endStr }),
     refetchInterval: 60000,
   });
 
-  const cancelledOrders = useMemo(() => todayOrders.filter((o) => o.status === 'cancelled'), [todayOrders]);
-  const doneOrders      = useMemo(() => todayOrders.filter((o) => o.status === 'done'), [todayOrders]);
+  const cancelledOrders = useMemo(() => rangeOrders.filter((o) => o.status === 'cancelled'), [rangeOrders]);
+  const doneOrders      = useMemo(() => rangeOrders.filter((o) => o.status === 'done'), [rangeOrders]);
 
   // Preset tanggal untuk export
   const setPreset = ({ days, monthToDate }) => {
@@ -105,11 +114,14 @@ export default function LaporanPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6" style={{ background: '#F5EFE6', minHeight: '100vh' }}>
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold" style={{ color: '#1A1A1A' }}>Laporan Penjualan</h1>
-        <p className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
-          Data hari ini · {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold" style={{ color: '#1A1A1A' }}>Laporan Penjualan</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
+            {range.label} · {fmtRangeLabel(startStr, endStr)}
+          </p>
+        </div>
+        <DateRangePicker value={range} onChange={setRange} />
       </div>
 
       {/* Export Card */}
@@ -179,7 +191,7 @@ export default function LaporanPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
-          Icon={CurrencyCircleDollar} label="Pendapatan Hari Ini"
+          Icon={CurrencyCircleDollar} label="Pendapatan"
           value={loadingSummary ? '...' : formatRupiah(summary?.revenue || 0)}
           sub={`${summary?.doneOrders || 0} order selesai`}
           color="green"
@@ -193,7 +205,7 @@ export default function LaporanPage() {
         <KpiCard
           Icon={ForkKnife} label="Item Terjual"
           value={loadingSummary ? '...' : summary?.totalItems || 0}
-          sub="pcs hari ini"
+          sub="pcs terjual"
           color="blue"
         />
         <KpiCard
@@ -207,8 +219,8 @@ export default function LaporanPage() {
       {/* Breakdown Tipe Transaksi */}
       <div className="bg-white rounded-2xl border shadow-sm p-5">
         <div className="mb-4">
-          <h2 className="font-bold text-gray-800">💳 Tipe Transaksi Hari Ini</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Breakdown pendapatan berdasarkan metode pembayaran</p>
+          <h2 className="font-bold text-gray-800">💳 Tipe Transaksi</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Breakdown pendapatan berdasarkan metode pembayaran · {range.label}</p>
         </div>
 
         {loadingSummary ? (
@@ -268,19 +280,7 @@ export default function LaporanPage() {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="font-bold text-gray-800">Pendapatan Harian</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Total omzet per hari (order selesai)</p>
-          </div>
-          <div className="flex items-center p-0.5 rounded-full" style={{ background: '#EBEBEB' }}>
-            {[7, 30].map((r) => (
-              <button key={r} onClick={() => setChartRange(r)}
-                className="px-3 py-1.5 rounded-full text-xs transition whitespace-nowrap"
-                style={chartRange === r
-                  ? { background: '#FFFFFF', color: '#1A1A1A', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
-                  : { color: '#6B7280', fontWeight: 400 }
-                }>
-                {r === 7 ? '7 hari' : 'Bulan ini'}
-              </button>
-            ))}
+            <p className="text-xs text-gray-400 mt-0.5">Total omzet per hari (order selesai) · {range.label}</p>
           </div>
         </div>
 
@@ -309,15 +309,15 @@ export default function LaporanPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Menu Terlaris */}
         <div className="bg-white rounded-2xl border shadow-sm p-5">
-          <h2 className="font-bold text-gray-800 mb-1">🏆 Menu Terlaris Hari Ini</h2>
-          <p className="text-xs text-gray-400 mb-4">Top 5 berdasarkan jumlah terjual</p>
+          <h2 className="font-bold text-gray-800 mb-1">🏆 Menu Terlaris</h2>
+          <p className="text-xs text-gray-400 mb-4">Top 5 berdasarkan jumlah terjual · {range.label}</p>
 
           {loadingTop ? (
             <div className="text-center py-8 text-gray-400">Memuat data...</div>
           ) : topMenu.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <p className="text-3xl mb-2">📭</p>
-              <p className="text-sm">Belum ada order selesai hari ini</p>
+              <p className="text-sm">Belum ada order selesai pada periode ini</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -357,7 +357,7 @@ export default function LaporanPage() {
         {/* Distribusi Order per Jam */}
         <div className="bg-white rounded-2xl border shadow-sm p-5">
           <h2 className="font-bold text-gray-800 mb-1">🕐 Distribusi Order per Jam</h2>
-          <p className="text-xs text-gray-400 mb-4">Jumlah order masuk per jam hari ini</p>
+          <p className="text-xs text-gray-400 mb-4">Jumlah order masuk per jam · {range.label}</p>
 
           {loadingHourly ? (
             <div className="text-center py-8 text-gray-400">Memuat data...</div>
@@ -393,7 +393,7 @@ export default function LaporanPage() {
       {/* Grafik jumlah order harian */}
       <div className="bg-white rounded-2xl border shadow-sm p-5">
         <h2 className="font-bold text-gray-800 mb-1">📈 Jumlah Order Harian</h2>
-        <p className="text-xs text-gray-400 mb-5">{chartRange === 7 ? 'Tren order dalam 7 hari terakhir' : 'Tren order bulan ini'}</p>
+        <p className="text-xs text-gray-400 mb-5">Tren order · {range.label}</p>
 
         {loadingChart ? (
           <div className="h-40 flex items-center justify-center text-gray-400">Memuat...</div>
@@ -417,8 +417,8 @@ export default function LaporanPage() {
       <div className="bg-white rounded-2xl border shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-bold text-gray-800">📋 Riwayat Order Hari Ini</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Semua order termasuk yang dibatalkan</p>
+            <h2 className="font-bold text-gray-800">📋 Riwayat Order</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Semua order termasuk yang dibatalkan · {range.label}</p>
           </div>
           <button
             onClick={() => setShowOrderHistory(true)}
@@ -431,7 +431,7 @@ export default function LaporanPage() {
         {/* Stats mini */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="rounded-xl bg-gray-50 border p-3 text-center">
-            <p className="text-xl font-black text-gray-700">{todayOrders.length}</p>
+            <p className="text-xl font-black text-gray-700">{rangeOrders.length}</p>
             <p className="text-xs text-gray-400 mt-0.5">Total Order</p>
           </div>
           <div className="rounded-xl bg-green-50 border border-green-100 p-3 text-center">
@@ -447,8 +447,8 @@ export default function LaporanPage() {
         {/* Preview tabel 5 order terbaru */}
         {loadingOrders ? (
           <div className="text-center py-6 text-gray-400 text-sm">Memuat data...</div>
-        ) : todayOrders.length === 0 ? (
-          <div className="text-center py-6 text-gray-400 text-sm">Belum ada order hari ini</div>
+        ) : rangeOrders.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 text-sm">Belum ada order pada periode ini</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -462,15 +462,15 @@ export default function LaporanPage() {
                 </tr>
               </thead>
               <tbody>
-                {todayOrders.slice(0, 5).map((order) => (
+                {rangeOrders.slice(0, 5).map((order) => (
                   <OrderRow key={order.id} order={order} />
                 ))}
               </tbody>
             </table>
-            {todayOrders.length > 5 && (
+            {rangeOrders.length > 5 && (
               <button onClick={() => setShowOrderHistory(true)}
                 className="w-full mt-3 text-xs text-gray-400 hover:text-orange-500 transition py-2">
-                +{todayOrders.length - 5} order lainnya — Lihat semua
+                +{rangeOrders.length - 5} order lainnya — Lihat semua
               </button>
             )}
           </div>
@@ -480,7 +480,8 @@ export default function LaporanPage() {
       {/* Modal Order History */}
       {showOrderHistory && (
         <OrderHistoryModal
-          orders={todayOrders}
+          orders={rangeOrders}
+          rangeLabel={range.label}
           onClose={() => setShowOrderHistory(false)}
         />
       )}
@@ -535,7 +536,7 @@ function OrderRow({ order }) {
   );
 }
 
-function OrderHistoryModal({ orders, onClose }) {
+function OrderHistoryModal({ orders, rangeLabel, onClose }) {
   const [filter, setFilter] = useState('semua');
   const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
@@ -555,8 +556,8 @@ function OrderHistoryModal({ orders, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
-            <h2 className="font-bold text-gray-800">📋 Riwayat Order Hari Ini</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{orders.length} total order</p>
+            <h2 className="font-bold text-gray-800">📋 Riwayat Order</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{orders.length} total order · {rangeLabel}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition text-sm">✕</button>
         </div>

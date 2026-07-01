@@ -79,10 +79,11 @@ const authHeader = () => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-export const getSummary  = () => api.get('/reports/summary',  { headers: authHeader() }).then((r) => r.data.data);
-export const getChart    = (range) => api.get(`/reports/chart?range=${range}`, { headers: authHeader() }).then((r) => r.data.data);
-export const getTopMenu  = () => api.get('/reports/top-menu', { headers: authHeader() }).then((r) => r.data.data);
-export const getHourly   = () => api.get('/reports/hourly',   { headers: authHeader() }).then((r) => r.data.data);
+// Semua laporan menerima rentang tanggal (YYYY-MM-DD, WIB). Kosong = default hari ini di backend.
+export const getSummary  = (start, end) => api.get('/reports/summary',  { params: { start, end }, headers: authHeader() }).then((r) => r.data.data);
+export const getChart    = (start, end) => api.get('/reports/chart',    { params: { start, end }, headers: authHeader() }).then((r) => r.data.data);
+export const getTopMenu  = (start, end) => api.get('/reports/top-menu', { params: { start, end }, headers: authHeader() }).then((r) => r.data.data);
+export const getHourly   = (start, end) => api.get('/reports/hourly',   { params: { start, end }, headers: authHeader() }).then((r) => r.data.data);
 
 // Export laporan sebagai CSV — trigger browser download
 export const exportReport = async (start, end) => {

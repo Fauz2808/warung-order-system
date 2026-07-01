@@ -41,12 +41,23 @@ const updateStatusSchema = z.object({
 // GET /api/orders — ambil order hari ini (WIB) untuk kasir/dapur
 router.get('/', async (req, res) => {
   try {
-    const { status, tableId, floor, date } = req.query;
+    const { status, tableId, floor, date, start, end } = req.query;
 
     // Filter tanggal — default: hari ini WIB (UTC+7)
-    // date param format: YYYY-MM-DD (WIB), atau 'all' untuk semua
+    // Prioritas: rentang start/end (YYYY-MM-DD WIB) > date tunggal > default hari ini
+    const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
     let dateFilter = {};
-    if (date !== 'all') {
+    if (YMD_RE.test(start || '') || YMD_RE.test(end || '')) {
+      const s = YMD_RE.test(start || '') ? start : end;
+      const e = YMD_RE.test(end || '')   ? end   : start;
+      const [a, b] = s <= e ? [s, e] : [e, s];
+      dateFilter = {
+        createdAt: {
+          gte: new Date(`${a}T00:00:00.000+07:00`),
+          lte: new Date(`${b}T23:59:59.999+07:00`),
+        },
+      };
+    } else if (date !== 'all') {
       const targetDate = date || null;
       // Midnight WIB = UTC-7 jam sebelumnya
       const todayWIB = targetDate

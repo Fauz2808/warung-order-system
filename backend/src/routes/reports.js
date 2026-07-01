@@ -10,51 +10,51 @@ const router = express.Router();
 // Semua endpoint laporan butuh auth
 router.use(authMiddleware);
 
-// Helper — ambil tanggal awal & akhir hari ini
-function getTodayRange() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
+// Semua laporan pakai zona waktu WIB (UTC+7), tidak tergantung TZ server.
+const WIB_MS = 7 * 60 * 60 * 1000;
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Tanggal hari ini dalam WIB, format YYYY-MM-DD
+function todayWIBStr() {
+  return new Date(Date.now() + WIB_MS).toISOString().split('T')[0];
 }
 
-// Helper — ambil 7 hari terakhir
-function getLast7Days() {
+// Parse query ?start & ?end (YYYY-MM-DD, ditafsirkan sebagai WIB).
+// Default: hari ini WIB. Otomatis membetulkan urutan bila terbalik.
+function getRange(req) {
+  const startStr = YMD_RE.test(req.query.start || '') ? req.query.start : todayWIBStr();
+  const endStr   = YMD_RE.test(req.query.end || '')   ? req.query.end   : startStr;
+  const [s, e]   = startStr <= endStr ? [startStr, endStr] : [endStr, startStr];
+  return {
+    startStr: s,
+    endStr:   e,
+    start: new Date(`${s}T00:00:00.000+07:00`),
+    end:   new Date(`${e}T23:59:59.999+07:00`),
+  };
+}
+
+// Bucket harian dari startStr..endStr (inklusif), label & batas dalam WIB
+function buildDayBuckets(startStr, endStr) {
   const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+  let cur = new Date(`${startStr}T00:00:00.000+07:00`);
+  const last = new Date(`${endStr}T00:00:00.000+07:00`);
+  while (cur <= last) {
+    const start = new Date(cur);
+    const end   = new Date(cur.getTime() + 24 * 60 * 60 * 1000 - 1);
     days.push({
-      label: d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }),
-      start: new Date(d.setHours(0, 0, 0, 0)),
-      end:   new Date(d.setHours(23, 59, 59, 999)),
+      label: start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }),
+      start,
+      end,
     });
+    cur = new Date(cur.getTime() + 24 * 60 * 60 * 1000);
   }
   return days;
 }
 
-// Helper — ambil hari-hari di bulan berjalan, mulai tanggal 1 sampai hari ini
-function getCurrentMonthDays() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-11
-  const today = now.getDate();
-  const days = [];
-  for (let d = 1; d <= today; d++) {
-    days.push({
-      label: new Date(year, month, d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-      start: new Date(year, month, d, 0, 0, 0, 0),
-      end:   new Date(year, month, d, 23, 59, 59, 999),
-    });
-  }
-  return days;
-}
-
-// GET /api/reports/summary — ringkasan hari ini
+// GET /api/reports/summary?start=YYYY-MM-DD&end=YYYY-MM-DD — ringkasan dalam rentang (default hari ini)
 router.get('/summary', async (req, res) => {
   try {
-    const { start, end } = getTodayRange();
+    const { start, end } = getRange(req);
 
     const doneWhere = { status: 'done', createdAt: { gte: start, lte: end } };
 
@@ -98,18 +98,14 @@ router.get('/summary', async (req, res) => {
   }
 });
 
-// GET /api/reports/chart?range=7 atau ?range=30
+// GET /api/reports/chart?start=YYYY-MM-DD&end=YYYY-MM-DD — tren harian dalam rentang
 router.get('/chart', async (req, res) => {
   try {
-    // range=30 -> bulan berjalan (mulai tanggal 1), selain itu 7 hari terakhir
-    const days = req.query.range === '30' ? getCurrentMonthDays() : getLast7Days();
-
-    // Query semua order done dalam rentang waktu sekaligus
-    const startDate = days[0].start;
-    const endDate   = days[days.length - 1].end;
+    const { start, end, startStr, endStr } = getRange(req);
+    const days = buildDayBuckets(startStr, endStr);
 
     const orders = await prisma.order.findMany({
-      where: { status: 'done', createdAt: { gte: startDate, lte: endDate } },
+      where: { status: 'done', createdAt: { gte: start, lte: end } },
       select: { totalAmount: true, createdAt: true },
     });
 
@@ -131,11 +127,11 @@ router.get('/chart', async (req, res) => {
   }
 });
 
-// GET /api/reports/top-menu?limit=5
+// GET /api/reports/top-menu?limit=5&start=YYYY-MM-DD&end=YYYY-MM-DD
 router.get('/top-menu', async (req, res) => {
   try {
     const limit  = parseInt(req.query.limit) || 5;
-    const { start, end } = getTodayRange();
+    const { start, end } = getRange(req);
 
     // Pakai raw groupBy karena Prisma tidak support groupBy langsung dengan sum
     const topMenu = await prisma.orderItem.groupBy({
@@ -164,10 +160,10 @@ router.get('/top-menu', async (req, res) => {
   }
 });
 
-// GET /api/reports/hourly — distribusi order per jam hari ini
+// GET /api/reports/hourly?start=YYYY-MM-DD&end=YYYY-MM-DD — distribusi order per jam (WIB)
 router.get('/hourly', async (req, res) => {
   try {
-    const { start, end } = getTodayRange();
+    const { start, end } = getRange(req);
 
     const orders = await prisma.order.findMany({
       where: { createdAt: { gte: start, lte: end } },
@@ -182,7 +178,8 @@ router.get('/hourly', async (req, res) => {
     }));
 
     orders.forEach((o) => {
-      const h = new Date(o.createdAt).getHours();
+      // Jam dalam WIB (UTC+7), tidak tergantung TZ server
+      const h = (new Date(o.createdAt).getUTCHours() + 7) % 24;
       hourly[h].orders++;
       if (o.status === 'done') hourly[h].revenue += o.totalAmount;
     });
@@ -202,14 +199,11 @@ router.get('/export', async (req, res) => {
   try {
     const { start, end } = req.query;
 
-    // Default: hari ini
-    const today = new Date();
-    const startDate = start
-      ? new Date(start + 'T00:00:00.000Z')
-      : new Date(today.setHours(0, 0, 0, 0));
-    const endDate = end
-      ? new Date(end + 'T23:59:59.999Z')
-      : new Date(new Date().setHours(23, 59, 59, 999));
+    // Batas hari dalam WIB (UTC+7), default: hari ini WIB
+    const startStr = YMD_RE.test(start || '') ? start : todayWIBStr();
+    const endStr   = YMD_RE.test(end || '')   ? end   : startStr;
+    const startDate = new Date(`${startStr}T00:00:00.000+07:00`);
+    const endDate   = new Date(`${endStr}T23:59:59.999+07:00`);
 
     const orders = await prisma.order.findMany({
       where: {
@@ -233,8 +227,8 @@ router.get('/export', async (req, res) => {
 
     // Header baris 1 — info export
     rows.push(['LAPORAN PENJUALAN CARRA COFFEE']);
-    rows.push([`Periode: ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} - ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`]);
-    rows.push([`Diekspor: ${new Date().toLocaleString('id-ID')}`]);
+    rows.push([`Periode: ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })} - ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })}`]);
+    rows.push([`Diekspor: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`]);
     rows.push([]); // baris kosong
 
     // Header kolom
