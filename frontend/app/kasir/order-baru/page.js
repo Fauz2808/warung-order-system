@@ -753,8 +753,9 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
   const [customNote, setCustomNote] = useState('');
   const [espressoShots, setEspressoShots] = useState(0);
 
-  const espressoNote = espressoShots > 0 ? `+${espressoShots} Espresso Shot` : null;
-  const combinedNotes = [espressoNote, selectedChips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
+  // Chips aktif + custom note. Espresso shot & suhu ditambahkan sekali saat submit
+  // (jangan diikutkan di sini agar tidak dobel di keterangan).
+  const combinedNotes = [selectedChips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
 
   const ICE_CHIPS = ['Less ice', 'No ice'];
   const isHot = selectedTemp === 'Hot';

@@ -656,9 +656,9 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
 
   const modifierExtra = selectedModifiers.reduce((s, m) => s + m.priceAdd, 0);
 
-  // Gabungkan espresso note + chips aktif + custom note saat submit
-  const espressoNote = espressoShots > 0 ? `+${espressoShots} Espresso Shot` : null;
-  const combinedNotes = [espressoNote, selectedChips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
+  // Chips aktif + custom note. Espresso shot & suhu ditambahkan sekali saat submit
+  // (jangan diikutkan di sini agar tidak dobel di keterangan).
+  const combinedNotes = [selectedChips.join(', '), customNote.trim()].filter(Boolean).join(' · ');
 
   // Chips yang di-disable otomatis jika Hot dipilih
   const ICE_CHIPS = ['Less ice', 'No ice'];
