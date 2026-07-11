@@ -99,6 +99,23 @@ model Table {
   isOccupied Boolean  @default(false)
   createdAt  DateTime @default(now())
   orders     Order[]
+  sessions   TableSession[]
+}
+
+// Bon per meja (open tab) — mengelompokkan beberapa order dalam satu kunjungan.
+// Customer bisa terus menambah order selama sesi "open"; kasir menutup + bayar sekaligus.
+model TableSession {
+  id            Int       @id @default(autoincrement())
+  tableId       Int
+  table         Table     @relation(fields: [tableId], references: [id])
+  status        String    @default("open")   // "open" | "closed"
+  customerName  String?
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  isPaid        Boolean   @default(false)
+  paymentMethod String?                       // "cash" | "qris" | "split" — diisi saat tutup bon
+  notes         String?                       // catatan pembayaran, mis. "[Pisah Bayar: Cash X + QRIS Y]"
+  orders        Order[]
 }
 
 model Order {
@@ -115,6 +132,8 @@ model Order {
   isPaid           Boolean     @default(false)  // false = belum bayar, true = sudah lunas
   paymentMethod    String      @default("cash")  // "cash" | "qris" | "split"
   paymentLocation  String?     // "kasir" | "meja" — ditentukan kasir saat selesaikan order
+  sessionId    Int?        // bon/open-tab yang menaungi order ini (null = order lama / take-away lepas)
+  session      TableSession? @relation(fields: [sessionId], references: [id])
   createdAt      DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   items        OrderItem[]

@@ -218,6 +218,29 @@ router.post('/', async (req, res) => {
     });
     const dailyNumber = todayOrderCount + 1;
 
+    // ── Open tab (bon per meja) ──────────────────────────────────
+    // Order dine-in yang belum dibayar digabung ke satu bon meja (TableSession).
+    // Customer bisa terus menambah; bayar sekali saat kasir menutup bon.
+    // Order take-away / bayar-langsung (isPaid) tetap berdiri sendiri seperti sebelumnya.
+    let sessionId = null;
+    if (orderType === 'dine-in' && !isPaid) {
+      let session = await prisma.tableSession.findFirst({
+        where: { tableId, status: 'open' },
+        orderBy: { openedAt: 'desc' },
+      });
+      if (!session) {
+        session = await prisma.tableSession.create({
+          data: { tableId, customerName: customerName || null },
+        });
+      } else if (customerName && !session.customerName) {
+        await prisma.tableSession.update({
+          where: { id: session.id },
+          data: { customerName },
+        });
+      }
+      sessionId = session.id;
+    }
+
     // Buat order + items + kurangi stok dalam satu transaction (tanpa include — fetch setelah transaction)
     const stockUpdates = items
       .filter((item) => menuMap[item.menuId].stock !== null)
@@ -240,6 +263,7 @@ router.post('/', async (req, res) => {
           isPaid,
           paymentMethod: isPaid ? (paymentMethod || 'cash') : 'cash',
           paymentLocation: paymentLocation || null,
+          sessionId,
           totalAmount,
           items: {
             create: items.map((item) => ({
@@ -348,16 +372,23 @@ router.put('/:id/status', async (req, res) => {
       include: { table: true, items: { include: { menu: true, modifiers: true } } },
     });
 
-    // Jika order selesai (done), cek apakah semua order di meja sudah done
+    // Jika order selesai (done), cek apakah meja bisa dikosongkan.
+    // Meja dengan bon (open tab) terbuka TIDAK dikosongkan di sini — hanya saat
+    // kasir menutup bon. Ini untuk order lepas (take-away/bayar-langsung) yang tak bersesi.
     if (parsed.data.status === 'done') {
-      const activeOrders = await prisma.order.count({
-        where: { tableId: order.tableId, status: { not: 'done' } },
+      const openSession = await prisma.tableSession.findFirst({
+        where: { tableId: order.tableId, status: 'open' },
       });
-      if (activeOrders === 0) {
-        await prisma.table.update({
-          where: { id: order.tableId },
-          data: { isOccupied: false },
+      if (!openSession) {
+        const activeOrders = await prisma.order.count({
+          where: { tableId: order.tableId, status: { not: 'done' } },
         });
+        if (activeOrders === 0) {
+          await prisma.table.update({
+            where: { id: order.tableId },
+            data: { isOccupied: false },
+          });
+        }
       }
     }
 

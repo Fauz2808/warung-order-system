@@ -37,6 +37,8 @@ export const deleteMenuImage = (id) => {
 
 // ─── Tables ──────────────────────────────────────────
 export const getTable = (id) => api.get(`/tables/${id}`).then((r) => r.data.data);
+// Bon (open tab) terbuka untuk meja (by number) — public, dipakai customer
+export const getTableSession = (id) => api.get(`/tables/${id}/session`).then((r) => r.data.data);
 export const getTables = () => api.get('/tables').then((r) => r.data.data);
 export const createTable = (data) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
@@ -101,6 +103,17 @@ export const exportReport = async (start, end) => {
   a.download = `laporan_carra_${start}_sd_${end}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+};
+
+// ─── Sessions (Bon per meja / open tab) ───────────────
+export const getOpenSessions = () => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.get('/sessions?status=open', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data.data);
+};
+// Tutup bon + catat pembayaran. payload: { paymentMethod, cashAmount?, qrisAmount?, notes? }
+export const closeSession = (id, payload) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.post(`/sessions/${id}/close`, payload, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
 };
 
 // ─── Categories ───────────────────────────────────────

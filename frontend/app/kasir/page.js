@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday, getSettings } from '@/lib/api';
+import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday, getSettings, getOpenSessions, closeSession } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
@@ -94,6 +94,7 @@ export default function KasirPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dismissedLowStock, setDismissedLowStock] = useState(false);
   const [payModalOrder, setPayModalOrder] = useState(null);
+  const [closeBonSession, setCloseBonSession] = useState(null);
   const [invoiceOrder, setInvoiceOrder] = useState(null);
   const [editOrder, setEditOrder] = useState(null);
   const [cancelOrder, setCancelOrder] = useState(null);
@@ -240,6 +241,15 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     enabled: !loading,
   });
 
+  // Bon terbuka (open tab) per meja
+  const { data: openSessions = [] } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: getOpenSessions,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
+    enabled: !loading,
+  });
+
   // Socket.IO — terima order baru & update status real-time
   useEffect(() => {
     if (loading) return; // skip kalau auth belum selesai
@@ -249,6 +259,7 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     // Order baru masuk dari customer
     socket.on('order:new', (newOrder) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
       playOrderSound();
       showBrowserNotif(newOrder);
       flashTabTitle(8);
@@ -268,16 +279,25 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     // Status order diupdate
     socket.on('order:status_update', () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    });
+
+    // Bon ditutup (dari perangkat kasir lain)
+    socket.on('session:closed', () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
     });
 
     // Reconnect setelah tab wake up / koneksi putus — langsung sync data terbaru
     socket.on('connect', () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
     });
 
     return () => {
       socket.off('order:new');
       socket.off('order:status_update');
+      socket.off('session:closed');
       socket.off('connect');
       socket.disconnect();
     };
@@ -314,6 +334,18 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       setPayModalOrder(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal update status bayar'),
+  });
+
+  // Tutup bon (open tab) — bayar sekaligus
+  const closeBonMutation = useMutation({
+    mutationFn: ({ id, ...payload }) => closeSession(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success(`Bon Meja ${closeBonSession?.table?.number} ditutup & lunas ✅`);
+      setCloseBonSession(null);
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal menutup bon'),
   });
 
   // Query menu untuk low stock alert
@@ -640,6 +672,51 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
         )}
       </div>
 
+      {/* Bon terbuka per meja (open tab) */}
+      {openSessions.length > 0 && (
+        <div className="px-3 sm:px-6 pt-2 pb-1">
+          <div className="flex items-center gap-2 mb-2">
+            <h2 className="font-bold text-sm" style={{ color: '#1A1A1A' }}>🧾 Bon Terbuka</h2>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#D8F3DC', color: '#1B4332' }}>
+              {openSessions.length} meja
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+            {openSessions.map((s) => {
+              const activeOrders = (s.orders || []).filter((o) => o.status !== 'cancelled');
+              const allDone = activeOrders.length > 0 && activeOrders.every((o) => o.status === 'done');
+              return (
+                <div key={s.id} className="bg-white rounded-2xl p-3.5 shadow-sm border" style={{ borderColor: allDone ? '#1B4332' : '#E8ECE4' }}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-bold text-sm" style={{ color: '#1A1A1A' }}>
+                        Meja {s.table?.number} <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>· {floorLabel(s.table?.floor)}</span>
+                      </p>
+                      {s.customerName && <p className="text-xs" style={{ color: '#9CA3AF' }}>👤 {s.customerName}</p>}
+                    </div>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={allDone
+                      ? { background: '#D8F3DC', color: '#1B4332' }
+                      : { background: '#FFF8EC', color: '#92660A' }}>
+                      {allDone ? 'Siap ditutup' : `${activeOrders.length} order`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-xs" style={{ color: '#9CA3AF' }}>{activeOrders.reduce((n, o) => n + (o.items?.length || 0), 0)} item</span>
+                    <span className="font-black text-base" style={{ color: '#1B4332' }}>{formatRupiah(s.runningTotal || 0)}</span>
+                  </div>
+                  <button
+                    onClick={() => setCloseBonSession(s)}
+                    className="w-full py-2.5 rounded-xl font-bold text-sm text-white transition active:scale-95"
+                    style={{ background: '#1B4332' }}>
+                    Tutup Bon / Bayar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Order list */}
       <div className="px-3 sm:px-6 pb-8">
         {isLoading ? (
@@ -715,6 +792,14 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
         onConfirm={({ notes, paymentMethod, cashAmount, qrisAmount }) => rootMarkPaidMutation.mutate({ id: payModalOrder.id, notes, paymentMethod, cashAmount, qrisAmount })}
         onClose={() => setPayModalOrder(null)}
         isPending={rootMarkPaidMutation.isPending}
+      />
+    )}
+    {closeBonSession && (
+      <CloseBonModal
+        session={closeBonSession}
+        onConfirm={(payload) => closeBonMutation.mutate({ id: closeBonSession.id, ...payload })}
+        onClose={() => setCloseBonSession(null)}
+        isPending={closeBonMutation.isPending}
       />
     )}
     {invoiceOrder && (
@@ -1144,6 +1229,176 @@ function CancelConfirmModal({ order, onConfirm, onClose }) {
             onMouseEnter={(e) => e.currentTarget.style.background = '#B91C1C'}
             onMouseLeave={(e) => e.currentTarget.style.background = '#DC2626'}>
             Ya, Batalkan
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CloseBonModal — tutup bon (open tab) + bayar sekaligus ───────
+function CloseBonModal({ session, onConfirm, onClose, isPending }) {
+  const total = session.runningTotal || 0;
+  const [method, setMethod] = useState('cash');
+  const [receivedRaw, setReceivedRaw] = useState('');
+  const [splitCashRaw, setSplitCashRaw] = useState('');
+
+  const fmt = (n) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+  const received  = parseInt(receivedRaw, 10) || 0;
+  const change    = received - total;
+  const splitCash = parseInt(splitCashRaw, 10) || 0;
+  const splitQris = splitCash > 0 ? Math.max(0, total - splitCash) : 0;
+  const splitValid = splitCash > 0 && splitCash < total;
+
+  const canSubmit =
+    (method === 'qris') ||
+    (method === 'cash' && received >= total) ||
+    (method === 'split' && splitValid);
+
+  const activeOrders = (session.orders || []).filter((o) => o.status !== 'cancelled');
+  const itemCount = activeOrders.reduce((n, o) => n + (o.items?.length || 0), 0);
+
+  const handleConfirm = () => {
+    if (method === 'cash') {
+      onConfirm({ paymentMethod: 'cash', notes: `[Bayar Cash: ${fmt(received)}, Kembalian: ${fmt(change)}]` });
+    } else if (method === 'qris') {
+      onConfirm({ paymentMethod: 'qris' });
+    } else {
+      onConfirm({ paymentMethod: 'split', cashAmount: splitCash, qrisAmount: splitQris });
+    }
+  };
+
+  const handleMethodChange = (v) => { setMethod(v); setReceivedRaw(''); setSplitCashRaw(''); };
+
+  const NUMPAD = ['1','2','3','4','5','6','7','8','9','C','0','⌫'];
+  const padPress = (k, setter) => {
+    setter((p) => {
+      if (k === '⌫') return p.slice(0, -1);
+      if (k === 'C')  return '';
+      const n = p + k;
+      return n.length > 10 ? p : n;
+    });
+  };
+
+  const Numpad = ({ setter }) => (
+    <div className="grid grid-cols-3 gap-2">
+      {NUMPAD.map((k) => (
+        <button key={k} onClick={() => padPress(k, setter)}
+          className="rounded-2xl font-bold flex items-center justify-center select-none"
+          style={{ height: '3rem', fontSize: '1.1rem',
+            background: k === '⌫' ? '#FEF2F2' : k === 'C' ? '#F5EFE6' : '#FAFAF8',
+            color: k === '⌫' ? '#DC2626' : k === 'C' ? '#6B7280' : '#1A1A1A',
+            border: `1.5px solid ${k === '⌫' ? '#FECACA' : '#E8ECE4'}` }}>
+          {k}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden">
+        <div className="flex justify-center pt-3 sm:hidden"><div className="w-10 h-1 rounded-full bg-gray-200" /></div>
+
+        {/* Header */}
+        <div className="px-4 pt-3 pb-3 border-b flex items-center justify-between" style={{ borderColor: '#E8ECE4' }}>
+          <div>
+            <p className="font-bold text-sm" style={{ color: '#1A1A1A' }}>🧾 Tutup Bon — Meja {session.table?.number}</p>
+            <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
+              {activeOrders.length} order · {itemCount} item{session.customerName ? ` · 👤 ${session.customerName}` : ''}
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-sm" style={{ background: '#F5EFE6', color: '#6B7280' }}>✕</button>
+        </div>
+
+        <div className="px-4 py-4 space-y-3 overflow-y-auto" style={{ maxHeight: '85vh' }}>
+          {/* Total */}
+          <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#D8F3DC' }}>
+            <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>Total Tagihan</p>
+            <p className="text-xl font-bold" style={{ color: '#1B4332' }}>{fmt(total)}</p>
+          </div>
+
+          {/* Metode */}
+          <div className="grid grid-cols-3 gap-2">
+            {[{ v:'cash', l:'💵 Cash' },{ v:'qris', l:'📱 QRIS' },{ v:'split', l:'✂️ Pisah' }].map((o) => (
+              <button key={o.v} onClick={() => handleMethodChange(o.v)}
+                className="py-2.5 rounded-xl border-2 font-bold text-sm transition"
+                style={method === o.v
+                  ? { borderColor: '#1B4332', background: '#D8F3DC', color: '#1B4332' }
+                  : { borderColor: '#E8ECE4', background: '#FAFAF8', color: '#1A1A1A' }}>
+                {o.l}
+              </button>
+            ))}
+          </div>
+
+          {/* Cash */}
+          {method === 'cash' && (
+            <div className="space-y-3">
+              <div className="rounded-2xl px-4 py-3 border-2" style={{ borderColor: received > 0 ? (change >= 0 ? '#1B4332' : '#DC2626') : '#E8ECE4', background: '#FAFAF8' }}>
+                <p className="text-xs font-semibold mb-0.5" style={{ color: '#9CA3AF' }}>Uang Diterima</p>
+                <p className="text-2xl font-bold" style={{ color: received > 0 ? (change >= 0 ? '#1B4332' : '#DC2626') : '#C8CCBE' }}>
+                  {received > 0 ? fmt(received) : 'Rp —'}
+                </p>
+                {received > 0 && (
+                  <p className="text-xs font-semibold mt-0.5" style={{ color: change >= 0 ? '#1B4332' : '#DC2626' }}>
+                    {change >= 0 ? `✅ Kembalian ${fmt(change)}` : `⚠️ Kurang ${fmt(Math.abs(change))}`}
+                  </p>
+                )}
+              </div>
+              <Numpad setter={setReceivedRaw} />
+            </div>
+          )}
+
+          {/* QRIS */}
+          {method === 'qris' && (
+            <div className="rounded-2xl p-4 text-center border-2 border-dashed" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
+              <p className="text-3xl mb-2">📱</p>
+              <p className="text-sm font-bold" style={{ color: '#1A1A1A' }}>Perlihatkan QRIS ke customer</p>
+              <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Setelah dibayar, tekan konfirmasi</p>
+            </div>
+          )}
+
+          {/* Pisah bayar */}
+          {method === 'split' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl px-3 py-3 border-2" style={{ borderColor: '#1B4332', background: '#F0FDF4' }}>
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#9CA3AF' }}>💵 Cash</p>
+                  <p className="text-base font-bold leading-tight" style={{ color: splitCash > 0 ? '#1B4332' : '#C8CCBE' }}>
+                    {splitCash > 0 ? fmt(splitCash) : 'Rp —'}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#1B4332' }}>▸ Ketik nominal</p>
+                </div>
+                <div className="rounded-2xl px-3 py-3 border-2" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#9CA3AF' }}>📱 QRIS</p>
+                  <p className="text-base font-bold leading-tight" style={{ color: splitQris > 0 ? '#7C3AED' : '#C8CCBE' }}>
+                    {splitQris > 0 ? fmt(splitQris) : 'Rp —'}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Otomatis</p>
+                </div>
+              </div>
+              {splitCash > 0 && (
+                <div className="rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: splitValid ? '#F0FDF4' : '#FEF2F2', color: splitValid ? '#166534' : '#DC2626' }}>
+                  {splitValid
+                    ? `✅ Cash ${fmt(splitCash)} + QRIS ${fmt(splitQris)} = ${fmt(total)}`
+                    : `⚠️ Nominal cash melebihi total — kurangi jumlahnya`}
+                </div>
+              )}
+              <Numpad setter={setSplitCashRaw} />
+            </div>
+          )}
+
+          {/* Konfirmasi */}
+          <button onClick={handleConfirm} disabled={!canSubmit || isPending}
+            className="w-full py-3.5 rounded-2xl font-bold text-sm text-white transition disabled:opacity-40"
+            style={{ background: '#1B4332' }}>
+            {isPending ? 'Memproses...'
+              : method === 'cash' ? (canSubmit ? `Tutup Bon · Kembalian ${fmt(change)}` : 'Masukkan jumlah uang')
+              : method === 'split' ? (canSubmit ? 'Tutup Bon (Pisah Bayar)' : 'Masukkan porsi cash')
+              : 'Tutup Bon (QRIS)'}
           </button>
         </div>
       </div>

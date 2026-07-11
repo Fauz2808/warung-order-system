@@ -2,11 +2,11 @@
 // app/meja/[id]/page.js
 // Halaman utama customer — muncul saat scan QR meja
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getTable, getMenu, createOrder, getSettings, getOrderById, setPaymentLocation } from '@/lib/api';
+import { getTable, getMenu, createOrder, getSettings, getTableSession } from '@/lib/api';
 import useCartStore from '@/store/cartStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSocket } from '@/lib/socket';
@@ -31,12 +31,13 @@ export default function MejaPage() {
   const tableId = parseInt(id);
   const [activeCategory, setActiveCategory] = useState('semua');
   const [showCart, setShowCart] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(null);
   const [addItemModal, setAddItemModal] = useState(null);
-  const [orderType, setOrderType] = useState('dine-in');
+  const [orderType] = useState('dine-in'); // customer QR = dine-in (open tab)
   const [customerName, setCustomerName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPayLoc, setSelectedPayLoc] = useState(null);
+  const [showMenu, setShowMenu] = useState(false);     // buka menu untuk nambah walau bon terbuka
+  const [justClosed, setJustClosed] = useState(false); // bon baru saja ditutup kasir
+  const prevSessionId = useRef(null);
 
   const { items, addItem, removeItem, updateTemperature, getTotal, getTotalItems, clearCart, setTable } = useCartStore();
   const queryClient = useQueryClient();
@@ -76,10 +77,11 @@ export default function MejaPage() {
 
   const orderMutation = useMutation({
     mutationFn: createOrder,
-    onSuccess: (res) => {
-      setOrderSuccess(res.data);
+    onSuccess: () => {
       clearCart();
       setShowCart(false);
+      setShowMenu(false);
+      queryClient.invalidateQueries({ queryKey: ['tableSession', tableId] });
       toast.success('Pesanan berhasil dikirim! 🎉');
     },
     onError: (err) => {
@@ -88,22 +90,25 @@ export default function MejaPage() {
     },
   });
 
-  const payLocMutation = useMutation({
-    mutationFn: ({ id, loc }) => setPaymentLocation(id, loc),
-    onSuccess: (_, { loc }) => {
-      setSelectedPayLoc(loc);
-      toast.success(loc === 'kasir' ? 'Oke, bayar di kasir ya!' : 'Siap, kami akan ke meja kamu!', { duration: 2500 });
-    },
-    onError: () => toast.error('Gagal menyimpan pilihan, coba lagi'),
-  });
-
-  const { data: liveOrder } = useQuery({
-    queryKey: ['order', orderSuccess?.id],
-    queryFn: () => getOrderById(orderSuccess.id),
-    enabled: !!orderSuccess,
-    refetchInterval: 3000,
+  // Bon (open tab) meja ini — polling untuk update status & deteksi tutup bon
+  const { data: session } = useQuery({
+    queryKey: ['tableSession', tableId],
+    queryFn: () => getTableSession(tableId),
+    enabled: !Number.isNaN(tableId),
+    refetchInterval: 4000,
     refetchOnWindowFocus: true,
   });
+
+  // Deteksi bon ditutup kasir: sebelumnya ada sesi, sekarang null → layar terima kasih
+  useEffect(() => {
+    if (session?.id) {
+      prevSessionId.current = session.id;
+    } else if (prevSessionId.current) {
+      prevSessionId.current = null;
+      setJustClosed(true);
+      setShowMenu(false);
+    }
+  }, [session]);
 
   const handleOrder = () => {
     if (items.length === 0) return;
@@ -111,7 +116,6 @@ export default function MejaPage() {
       tableId: table?.id ?? tableId,
       orderType,
       customerName: customerName.trim() || undefined,
-      paymentLocation: selectedPayLoc || undefined,
       items: items.map((i) => ({
         menuId: i.menuId,
         quantity: i.quantity,
@@ -194,165 +198,41 @@ export default function MejaPage() {
     );
   }
 
-  // Order sukses — tracking screen
-  if (orderSuccess) {
-    const status = liveOrder?.status || orderSuccess.status || 'pending';
-    const isDone = status === 'done';
-    const isReady = status === 'ready';
-    const stepIndex = { pending: 0, preparing: 1, ready: 2, done: 2 };
-    const currentStep = stepIndex[status] ?? 0;
+  // Bon baru saja ditutup kasir → layar terima kasih
+  if (justClosed) {
+    return <ThankYouScreen table={table} onReset={() => { setJustClosed(false); setShowMenu(false); }} />;
+  }
 
-    const steps = [
-      { label: 'Diterima', icon: '📋' },
-      { label: 'Diproses', icon: '👨‍🍳' },
-      { label: 'Siap',     icon: '🔔' },
-    ];
-
+  // Ada bon terbuka & tidak sedang menambah → tampilkan Bon (open tab)
+  if (session && !showMenu) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F5EFE6' }}>
-        <div className="bg-white rounded-3xl shadow-lg p-6 max-w-sm w-full">
-
-          {/* Header */}
-          <div className="text-center mb-6">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-3xl"
-              style={{ background: isDone || isReady ? PRIMARY_LIGHT : '#FFF8EC' }}
-            >
-              {isDone || isReady ? '✓' : '☕'}
-            </div>
-            <h2 className="text-xl font-bold" style={{ color: '#1A1A1A' }}>
-              {isDone || isReady ? 'Pesanan Siap!' : 'Pesanan Diterima!'}
-            </h2>
-            <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>
-              Order #{orderSuccess.id}
-              {orderSuccess.customerName ? ` · ${orderSuccess.customerName}` : ''}
-            </p>
-            {!(isDone || isReady) && orderSuccess.estimatedMinutes && (
-              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold"
-                style={{ background: '#FFF8EC', color: '#92660A', border: '1px solid #FDE68A' }}>
-                ⏱️ Estimasi siap ~{orderSuccess.estimatedMinutes} menit
-              </div>
-            )}
-          </div>
-
-          {/* Status steps */}
-          <div className="relative flex items-start justify-between mb-6 px-1">
-            {/* Background line */}
-            <div className="absolute h-0.5" style={{ top: 18, left: 22, right: 22, background: '#E8ECE4', zIndex: 0 }} />
-            {/* Progress line */}
-            <div className="absolute h-0.5 transition-all duration-500"
-              style={{
-                top: 18, left: 22,
-                width: `calc((100% - 44px) * ${currentStep / 2})`,
-                background: PRIMARY, zIndex: 1,
-              }}
-            />
-            {steps.map((step, i) => {
-              const done = currentStep > i || ((isDone || isReady) && i === 2);
-              const active = currentStep === i && !(isDone || isReady);
-              return (
-                <div key={i} className="flex flex-col items-center gap-1.5 relative z-10">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center border-2 text-sm"
-                    style={{
-                      background: done ? PRIMARY : active ? '#FFF8EC' : '#F5EFE6',
-                      borderColor: done ? PRIMARY : active ? '#F59E0B' : '#E8ECE4',
-                      color: done ? '#fff' : active ? '#92660A' : '#C4C9BD',
-                    }}
-                  >
-                    {done ? '✓' : step.icon}
-                  </div>
-                  <p className="text-xs text-center leading-tight whitespace-nowrap" style={{ color: done || active ? '#1A1A1A' : '#C4C9BD' }}>
-                    {step.label}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Invoice */}
-          <div className="rounded-2xl p-4 mb-4" style={{ background: '#F5EFE6' }}>
-            <div className="flex justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9CA3AF' }}>Detail Pesanan</p>
-              <p className="text-xs font-semibold" style={{ color: '#9CA3AF' }}>Meja {table?.number}</p>
-            </div>
-            <div className="space-y-2">
-              {orderSuccess.items?.map((item) => (
-                <div key={item.id}>
-                  <div className="flex justify-between text-sm">
-                    <span style={{ color: '#1A1A1A' }}>{item.quantity}× {item.menuName || item.menu?.name}</span>
-                    <span style={{ color: '#6B7280' }}>{formatRupiah(item.price * item.quantity)}</span>
-                  </div>
-                  {item.notes && (
-                    <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block" style={{ background: '#FEF3C7', color: '#92400E' }}>
-                      {item.notes}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="border-t mt-3 pt-3 flex justify-between" style={{ borderColor: '#E8ECE4' }}>
-              <span className="font-bold text-sm" style={{ color: '#1A1A1A' }}>Total</span>
-              <span className="font-bold text-sm" style={{ color: PRIMARY }}>{formatRupiah(orderSuccess.totalAmount)}</span>
-            </div>
-          </div>
-
-          {isDone || isReady ? (
-            <>
-              <div className="text-center py-3 px-4 rounded-2xl mb-4" style={{ background: PRIMARY_LIGHT }}>
-                <p className="font-semibold text-sm" style={{ color: PRIMARY }}>
-                  Pesananmu sudah siap! Selamat menikmati ☕
-                </p>
-              </div>
-              <button
-                onClick={() => setOrderSuccess(null)}
-                className="w-full py-3.5 rounded-2xl font-semibold text-white transition active:scale-95"
-                style={{ background: PRIMARY }}
-              >
-                Pesan Lagi
-              </button>
-            </>
-          ) : (
-            <div className="space-y-3">
-              {/* Konfirmasi lokasi bayar yang dipilih */}
-              {(selectedPayLoc || liveOrder?.paymentLocation) && (
-                <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
-                  style={{ background: (selectedPayLoc || liveOrder?.paymentLocation) === 'meja' ? '#EDE9FE' : PRIMARY_LIGHT }}>
-                  <span className="text-xl">{(selectedPayLoc || liveOrder?.paymentLocation) === 'meja' ? '🙋' : '🏪'}</span>
-                  <div>
-                    <p className="text-xs font-semibold"
-                      style={{ color: (selectedPayLoc || liveOrder?.paymentLocation) === 'meja' ? '#7C3AED' : PRIMARY }}>
-                      {(selectedPayLoc || liveOrder?.paymentLocation) === 'meja'
-                        ? 'Bayar di Meja — kami akan ke mejamu'
-                        : 'Bayar di Kasir — silakan ke kasir saat pesanan siap'}
-                    </p>
-                  </div>
-                </div>
-              )}
-              <p className="text-center text-xs py-1" style={{ color: '#9CA3AF' }}>
-                Mohon tunggu, kami sedang menyiapkan pesananmu ☕
-                <br />
-                <span style={{ color: '#C4C9BD' }}>Halaman ini otomatis update</span>
-              </p>
-              <button
-                onClick={() => setOrderSuccess(null)}
-                className="w-full py-3 rounded-2xl font-semibold text-sm transition active:scale-95 border-2"
-                style={{ borderColor: PRIMARY, color: PRIMARY, background: 'transparent' }}
-              >
-                + Tambah Pesanan
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <BonView
+        session={session}
+        table={table}
+        businessName={shopSettings?.businessName}
+        onAddMore={() => setShowMenu(true)}
+      />
     );
   }
 
   return (
     <div className="min-h-screen pb-28" style={{ background: '#F5EFE6' }}>
 
+      {/* Kembali ke Bon (kalau sedang menambah pesanan) */}
+      {session && (
+        <div className="px-4 pt-4">
+          <button
+            onClick={() => setShowMenu(false)}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-full"
+            style={{ background: '#fff', color: PRIMARY, border: `1px solid ${PRIMARY_LIGHT}` }}
+          >
+            ← Kembali ke Bon
+          </button>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────── */}
-      <div className="px-4 pt-10 pb-5" style={{ background: '#F5EFE6' }}>
+      <div className={`px-4 pb-5 ${session ? 'pt-6' : 'pt-10'}`} style={{ background: '#F5EFE6' }}>
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: PRIMARY }}>
@@ -512,12 +392,9 @@ export default function MejaPage() {
           onTempChange={updateTemperature}
           loading={orderMutation.isPending}
           menu={menu}
-          orderType={orderType}
-          setOrderType={setOrderType}
           customerName={customerName}
           setCustomerName={setCustomerName}
-          paymentLoc={selectedPayLoc}
-          setPaymentLoc={setSelectedPayLoc}
+          hasOpenTab={!!session}
         />
       )}
     </div>
@@ -898,7 +775,7 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
 }
 
 // ─── CartModal ────────────────────────────────────────
-function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChange, loading, menu, orderType, setOrderType, customerName, setCustomerName, paymentLoc, setPaymentLoc }) {
+function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChange, loading, menu, customerName, setCustomerName, hasOpenTab }) {
   return (
     <div className="fixed inset-0 z-30 flex items-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -906,7 +783,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #F0F0EC' }}>
-          <h2 className="text-lg font-bold" style={{ color: '#1A1A1A' }}>Pesanan Kamu</h2>
+          <h2 className="text-lg font-bold" style={{ color: '#1A1A1A' }}>{hasOpenTab ? 'Tambah Pesanan' : 'Pesanan Kamu'}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-sm transition"
@@ -917,63 +794,14 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Dine In / Take Away */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Tipe Pesanan</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: 'dine-in',   label: 'Dine In',   emoji: '🪑' },
-                { value: 'take-away', label: 'Take Away',  emoji: '🥡' },
-              ].map((opt) => {
-                const isActive = orderType === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => setOrderType(opt.value)}
-                    className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-semibold text-sm transition"
-                    style={{
-                      borderColor: isActive ? '#1B4332' : '#E8ECE4',
-                      background:  isActive ? '#D8F3DC' : 'transparent',
-                      color:       isActive ? '#1B4332' : '#6B7280',
-                    }}
-                  >
-                    <span>{opt.emoji}</span> {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Cara Bayar */}
-          <div style={{ borderTop: '1px solid #F0F0EC', paddingTop: '1rem' }}>
-            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Cara Bayar</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: 'kasir', label: 'Bayar di Kasir', emoji: '🏪', desc: 'Kamu yang ke kasir' },
-                { value: 'meja',  label: 'Bayar di Meja',  emoji: '🙋', desc: 'Kami yang ke mejamu' },
-              ].map((opt) => {
-                const isActive = paymentLoc === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => setPaymentLoc(opt.value)}
-                    className="flex flex-col items-center gap-0.5 py-3 rounded-xl border-2 transition"
-                    style={{
-                      borderColor: isActive ? PRIMARY : '#E8ECE4',
-                      background:  isActive ? PRIMARY_LIGHT : 'transparent',
-                    }}
-                  >
-                    <span className="text-xl">{opt.emoji}</span>
-                    <span className="text-xs font-semibold" style={{ color: isActive ? PRIMARY : '#1A1A1A' }}>{opt.label}</span>
-                    <span className="text-xs" style={{ color: '#9CA3AF' }}>{opt.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Info open tab */}
+          <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: PRIMARY_LIGHT, color: PRIMARY }}>
+            💳 Pesanan digabung ke satu bon meja. Bayar sekaligus di kasir saat kamu selesai.
           </div>
 
           {/* Nama Customer */}
-          <div style={{ borderTop: '1px solid #F0F0EC', paddingTop: '1rem' }}>
+          {!hasOpenTab && (
+          <div>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Nama Kamu</p>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">👤</span>
@@ -994,6 +822,7 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
               />
             </div>
           </div>
+          )}
 
           {/* Item list */}
           <div style={{ borderTop: '1px solid #F0F0EC', paddingTop: '1rem' }}>
@@ -1082,6 +911,121 @@ function CartModal({ items, total, onClose, onOrder, onAdd, onRemove, onTempChan
             {loading ? 'Mengirim...' : 'Pesan Sekarang →'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BonView (open tab) — daftar pesanan + total berjalan ─────────────
+const ORDER_STATUS = {
+  pending:   { label: 'Diterima', bg: '#FFF8EC', color: '#92660A' },
+  preparing: { label: 'Diproses', bg: '#EFF6FF', color: '#2563EB' },
+  done:      { label: 'Siap',     bg: '#D8F3DC', color: '#1B4332' },
+};
+
+function BonView({ session, table, businessName, onAddMore }) {
+  const orders = (session.orders || []).filter((o) => o.status !== 'cancelled');
+
+  return (
+    <div className="min-h-screen pb-32" style={{ background: '#F5EFE6' }}>
+      {/* Header */}
+      <div className="px-4 pt-10 pb-5">
+        <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: PRIMARY }}>
+          {businessName || 'Warung Kita'}
+        </p>
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="text-3xl font-black" style={{ color: '#1A1A1A', letterSpacing: '-0.5px' }}>
+              Meja {table?.number}
+            </h1>
+            <p className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
+              Bon terbuka · {orders.length} pesanan
+            </p>
+          </div>
+          <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: PRIMARY_LIGHT, color: PRIMARY }}>
+            ● Aktif
+          </span>
+        </div>
+      </div>
+
+      {/* Daftar pesanan */}
+      <div className="px-4 space-y-3">
+        {orders.length === 0 ? (
+          <div className="bg-white rounded-2xl p-6 text-center text-sm" style={{ color: '#9CA3AF', border: '1px solid #F0F0EC' }}>
+            Belum ada pesanan. Tekan tombol di bawah untuk memesan ☕
+          </div>
+        ) : orders.map((o) => {
+          const st = ORDER_STATUS[o.status] || { label: o.status, bg: '#F5EFE6', color: '#6B7280' };
+          return (
+            <div key={o.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: '1px solid #F0F0EC' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold" style={{ color: '#9CA3AF' }}>Order #{o.dailyNumber || o.id}</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: st.bg, color: st.color }}>
+                  {st.label}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {(o.items || []).map((it) => (
+                  <div key={it.id}>
+                    <div className="flex justify-between text-sm">
+                      <span style={{ color: '#1A1A1A' }}>{it.quantity}× {it.menuName || it.menu?.name}</span>
+                      <span style={{ color: '#6B7280' }}>{formatRupiah(it.price * it.quantity)}</span>
+                    </div>
+                    {it.notes && (
+                      <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                        {it.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Total berjalan + info */}
+      <div className="px-4 mt-4">
+        <div className="rounded-2xl p-4" style={{ background: '#fff', border: '1px solid #F0F0EC' }}>
+          <div className="flex justify-between items-center">
+            <span className="font-bold" style={{ color: '#1A1A1A' }}>Total Sementara</span>
+            <span className="font-black text-xl" style={{ color: PRIMARY }}>{formatRupiah(session.runningTotal || 0)}</span>
+          </div>
+          <p className="text-xs mt-2" style={{ color: '#9CA3AF' }}>
+            💳 Pembayaran dilakukan sekaligus di kasir saat kamu selesai.
+          </p>
+        </div>
+      </div>
+
+      {/* Tombol tambah pesanan */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3"
+        style={{ background: 'linear-gradient(to top, #F5EFE6 70%, transparent)' }}>
+        <button onClick={onAddMore}
+          className="w-full rounded-2xl py-4 font-bold text-white shadow-lg transition active:scale-95"
+          style={{ background: PRIMARY }}>
+          + Tambah Pesanan
+        </button>
+        <p className="text-center text-xs mt-2" style={{ color: '#9CA3AF' }}>Halaman ini otomatis update ☕</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── ThankYouScreen — bon ditutup kasir ───────────────────────────────
+function ThankYouScreen({ table, onReset }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F5EFE6' }}>
+      <div className="bg-white rounded-3xl shadow-lg p-8 max-w-sm w-full text-center">
+        <div className="text-6xl mb-4">🙏</div>
+        <h2 className="text-2xl font-bold mb-2" style={{ color: '#1A1A1A' }}>Terima kasih!</h2>
+        <p className="text-sm mb-6" style={{ color: '#6B7280' }}>
+          Bon Meja {table?.number} sudah ditutup & dibayar. Sampai jumpa lagi ya ☕
+        </p>
+        <button onClick={onReset}
+          className="w-full py-3.5 rounded-2xl font-semibold text-white transition active:scale-95"
+          style={{ background: PRIMARY }}>
+          Pesan Lagi
+        </button>
       </div>
     </div>
   );

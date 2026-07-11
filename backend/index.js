@@ -16,6 +16,7 @@ const settingsRoutes   = require('./src/routes/settings');
 const categoryRoutes   = require('./src/routes/categories');
 const userRoutes       = require('./src/routes/users');
 const modifierRoutes   = require('./src/routes/modifiers');
+const sessionRoutes    = require('./src/routes/sessions');
 
 const app = express();
 const server = http.createServer(app); // Bungkus express dengan http server (wajib untuk Socket.IO)
@@ -64,6 +65,7 @@ app.use('/api/settings',    settingsRoutes);
 app.use('/api/categories',  categoryRoutes);
 app.use('/api/users',       userRoutes);
 app.use('/api/modifiers',   modifierRoutes);
+app.use('/api/sessions',    sessionRoutes);
 
 // Health check — buat cek server jalan
 app.get('/api/health', (req, res) => {
@@ -122,6 +124,22 @@ setInterval(() => {
     });
     if (updated.count > 0) {
       console.log(`✅ Backfill: ${updated.count} order diupdate ke paymentMethod=qris`);
+    }
+  } catch (_) {}
+})();
+
+// ─── Backfill isPaid: order 'done' TANPA bon (sessionId null) dianggap lunas ──
+// Laporan omzet kini berbasis isPaid. Order lama yang sudah 'done' (alur lama,
+// tanpa open tab) ditandai lunas agar riwayat omzet tetap utuh. Order open-tab
+// (punya sessionId) TIDAK disentuh — lunas hanya saat kasir menutup bon.
+(async () => {
+  try {
+    const updated = await prisma.order.updateMany({
+      where: { status: 'done', isPaid: false, sessionId: null },
+      data: { isPaid: true },
+    });
+    if (updated.count > 0) {
+      console.log(`✅ Backfill: ${updated.count} order 'done' lama ditandai lunas (isPaid)`);
     }
   } catch (_) {}
 })();

@@ -54,6 +54,42 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /api/tables/:id/session — bon (open tab) terbuka untuk meja (by NUMBER), public
+// Dipakai halaman customer untuk resume/gabung bon & polling status
+router.get('/:id/session', async (req, res) => {
+  try {
+    const number = parseInt(req.params.id);
+    const table = await prisma.table.findUnique({ where: { number } });
+    if (!table) {
+      return res.status(404).json({ success: false, message: 'Meja tidak ditemukan' });
+    }
+
+    const session = await prisma.tableSession.findFirst({
+      where: { tableId: table.id, status: 'open' },
+      orderBy: { openedAt: 'desc' },
+      include: {
+        orders: {
+          include: { items: { include: { menu: true, modifiers: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!session) {
+      return res.json({ success: true, data: null });
+    }
+
+    const runningTotal = session.orders
+      .filter((o) => o.status !== 'cancelled')
+      .reduce((s, o) => s + o.totalAmount, 0);
+
+    res.json({ success: true, data: { ...session, runningTotal } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data bon meja' });
+  }
+});
+
 // POST /api/tables — tambah meja baru (kasir & owner)
 router.post('/', authMiddleware, async (req, res) => {
   try {

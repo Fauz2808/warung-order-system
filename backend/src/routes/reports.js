@@ -56,23 +56,26 @@ router.get('/summary', async (req, res) => {
   try {
     const { start, end } = getRange(req);
 
-    const doneWhere = { status: 'done', createdAt: { gte: start, lte: end } };
+    // Omzet & breakdown pembayaran berbasis order yang SUDAH DIBAYAR (isPaid).
+    // Dengan open tab, order bisa "done" tapi belum dibayar (bon masih terbuka) —
+    // pakai isPaid agar bon terbuka tidak menggelembungkan pendapatan.
+    const paidWhere = { isPaid: true, createdAt: { gte: start, lte: end } };
 
     const [totalOrders, doneOrders, cancelledOrders, revenue, totalItems, cashRevenue, qrisRevenue, splitRevenue, cashOrders, qrisOrders, splitOrders] = await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: start, lte: end } } }),
-      prisma.order.count({ where: doneWhere }),
+      prisma.order.count({ where: paidWhere }),
       prisma.order.count({ where: { status: 'cancelled', createdAt: { gte: start, lte: end } } }),
-      prisma.order.aggregate({ where: doneWhere, _sum: { totalAmount: true } }),
-      prisma.orderItem.aggregate({ where: { order: doneWhere }, _sum: { quantity: true } }),
+      prisma.order.aggregate({ where: paidWhere, _sum: { totalAmount: true } }),
+      prisma.orderItem.aggregate({ where: { order: paidWhere }, _sum: { quantity: true } }),
       // Breakdown Cash
-      prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'cash' }, _sum: { totalAmount: true } }),
+      prisma.order.aggregate({ where: { ...paidWhere, paymentMethod: 'cash' }, _sum: { totalAmount: true } }),
       // Breakdown QRIS
-      prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'qris' }, _sum: { totalAmount: true } }),
+      prisma.order.aggregate({ where: { ...paidWhere, paymentMethod: 'qris' }, _sum: { totalAmount: true } }),
       // Breakdown Split
-      prisma.order.aggregate({ where: { ...doneWhere, paymentMethod: 'split' }, _sum: { totalAmount: true } }),
-      prisma.order.count({ where: { ...doneWhere, paymentMethod: 'cash' } }),
-      prisma.order.count({ where: { ...doneWhere, paymentMethod: 'qris' } }),
-      prisma.order.count({ where: { ...doneWhere, paymentMethod: 'split' } }),
+      prisma.order.aggregate({ where: { ...paidWhere, paymentMethod: 'split' }, _sum: { totalAmount: true } }),
+      prisma.order.count({ where: { ...paidWhere, paymentMethod: 'cash' } }),
+      prisma.order.count({ where: { ...paidWhere, paymentMethod: 'qris' } }),
+      prisma.order.count({ where: { ...paidWhere, paymentMethod: 'split' } }),
     ]);
 
     res.json({
@@ -105,7 +108,7 @@ router.get('/chart', async (req, res) => {
     const days = buildDayBuckets(startStr, endStr);
 
     const orders = await prisma.order.findMany({
-      where: { status: 'done', createdAt: { gte: start, lte: end } },
+      where: { isPaid: true, createdAt: { gte: start, lte: end } },
       select: { totalAmount: true, createdAt: true },
     });
 
@@ -136,7 +139,7 @@ router.get('/top-menu', async (req, res) => {
     // Pakai raw groupBy karena Prisma tidak support groupBy langsung dengan sum
     const topMenu = await prisma.orderItem.groupBy({
       by: ['menuId'],
-      where: { order: { status: 'done', createdAt: { gte: start, lte: end } } },
+      where: { order: { isPaid: true, createdAt: { gte: start, lte: end } } },
       _sum: { quantity: true },
       orderBy: { _sum: { quantity: 'desc' } },
       take: limit,
@@ -167,7 +170,7 @@ router.get('/hourly', async (req, res) => {
 
     const orders = await prisma.order.findMany({
       where: { createdAt: { gte: start, lte: end } },
-      select: { createdAt: true, totalAmount: true, status: true },
+      select: { createdAt: true, totalAmount: true, isPaid: true },
     });
 
     // Kelompokkan per jam (0-23)
@@ -181,7 +184,7 @@ router.get('/hourly', async (req, res) => {
       // Jam dalam WIB (UTC+7), tidak tergantung TZ server
       const h = (new Date(o.createdAt).getUTCHours() + 7) % 24;
       hourly[h].orders++;
-      if (o.status === 'done') hourly[h].revenue += o.totalAmount;
+      if (o.isPaid) hourly[h].revenue += o.totalAmount;
     });
 
     // Hanya kirim jam yang ada aktivitas + jam sekitar jam operasional (07-22)

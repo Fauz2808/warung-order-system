@@ -1,0 +1,122 @@
+// src/routes/sessions.js
+// Bon per meja (open tab) — daftar bon terbuka & tutup bon (bayar) untuk kasir
+
+const express = require('express');
+const prisma = require('../prisma');
+const authMiddleware = require('../middleware/auth');
+
+const router = express.Router();
+
+const fmt = (n) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+const orderInclude = { items: { include: { menu: true, modifiers: true } } };
+
+// Hitung total berjalan bon (order yang tidak dibatalkan)
+const runningTotalOf = (orders) =>
+  (orders || []).filter((o) => o.status !== 'cancelled').reduce((s, o) => s + o.totalAmount, 0);
+
+// GET /api/sessions?status=open — daftar bon (auth kasir)
+router.get('/', authMiddleware, async (req, res) => {
+  try {
+    const status = req.query.status || 'open';
+    const sessions = await prisma.tableSession.findMany({
+      where: status === 'all' ? {} : { status },
+      include: {
+        table: true,
+        orders: { include: orderInclude, orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { openedAt: 'asc' },
+    });
+    const data = sessions.map((s) => ({ ...s, runningTotal: runningTotalOf(s.orders) }));
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data bon' });
+  }
+});
+
+// POST /api/sessions/:id/close — tutup bon + catat pembayaran (auth kasir)
+// Body: { paymentMethod: 'cash'|'qris'|'split', cashAmount?, qrisAmount?, notes? }
+router.post('/:id/close', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { paymentMethod, cashAmount, qrisAmount, notes } = req.body;
+
+    const session = await prisma.tableSession.findUnique({
+      where: { id },
+      include: { orders: true },
+    });
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Bon tidak ditemukan' });
+    }
+    if (session.status === 'closed') {
+      return res.status(400).json({ success: false, message: 'Bon sudah ditutup' });
+    }
+
+    const validMethods = ['cash', 'qris', 'split'];
+    const method = validMethods.includes(paymentMethod) ? paymentMethod : 'cash';
+
+    const activeOrders = session.orders.filter((o) => o.status !== 'cancelled');
+    const total = runningTotalOf(session.orders);
+
+    // Susun catatan pembayaran + validasi pisah bayar
+    let payNote = notes || null;
+    if (method === 'split') {
+      const cash = parseInt(cashAmount) || 0;
+      const qris = parseInt(qrisAmount) || 0;
+      if (cash <= 0 || qris <= 0) {
+        return res.status(400).json({ success: false, message: 'Nominal cash dan QRIS harus lebih dari 0' });
+      }
+      if (cash + qris !== total) {
+        return res.status(400).json({ success: false, message: 'Total pembayaran tidak sesuai dengan tagihan' });
+      }
+      payNote = `[Pisah Bayar: Cash ${fmt(cash)} + QRIS ${fmt(qris)}]`;
+    } else if (!payNote) {
+      payNote = method === 'qris' ? '[Bayar QRIS]' : '[Bayar Cash]';
+    }
+
+    const activeIds = activeOrders.map((o) => o.id);
+
+    await prisma.$transaction([
+      // Tandai semua order aktif di bon: lunas + metode + selesai
+      prisma.order.updateMany({
+        where: { id: { in: activeIds } },
+        data: { isPaid: true, paymentMethod: method, status: 'done' },
+      }),
+      // Tutup sesi + catat pembayaran
+      prisma.tableSession.update({
+        where: { id },
+        data: {
+          status: 'closed',
+          closedAt: new Date(),
+          isPaid: true,
+          paymentMethod: method,
+          notes: payNote,
+        },
+      }),
+      // Kosongkan meja
+      prisma.table.update({
+        where: { id: session.tableId },
+        data: { isOccupied: false },
+      }),
+    ]);
+
+    const updated = await prisma.tableSession.findUnique({
+      where: { id },
+      include: { table: true, orders: { include: orderInclude } },
+    });
+
+    if (req.io) {
+      req.io.emit('session:closed', { sessionId: id, tableId: session.tableId });
+      req.io.emit('order:status_update', { sessionId: id });
+    }
+
+    res.json({ success: true, data: updated, message: 'Bon ditutup & pembayaran tercatat' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Gagal menutup bon' });
+  }
+});
+
+module.exports = router;
