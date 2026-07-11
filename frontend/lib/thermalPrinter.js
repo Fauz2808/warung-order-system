@@ -310,10 +310,18 @@ export async function printReceipt(order, kasirName) {
           parts.push(txt(`   +${item.additionalEspressoShots} Espresso Shot\n`));
         }
         if (item.notes) {
-          // Max 50 chars, word-wrap to fit 32-char width with 3-space indent
-          const noteText = item.notes.slice(0, 50);
-          const noteLines = wrapText(noteText, W, '   ');
-          for (const line of noteLines) parts.push(txt(line + '\n'));
+          // Buang fragmen "+N Espresso Shot" dari notes — sudah dicetak dari
+          // field terstruktur di atas, jadi tidak dobel di struk.
+          const cleanedNotes = item.notes
+            .split(' · ')
+            .filter((seg) => !/^\+\d+\s*Espresso Shot$/i.test(seg.trim()))
+            .join(' · ');
+          if (cleanedNotes) {
+            // Max 50 chars, word-wrap to fit 32-char width with 3-space indent
+            const noteText = cleanedNotes.slice(0, 50);
+            const noteLines = wrapText(noteText, W, '   ');
+            for (const line of noteLines) parts.push(txt(line + '\n'));
+          }
         }
       }
     }
