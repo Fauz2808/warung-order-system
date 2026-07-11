@@ -15,7 +15,7 @@ const createOrderSchema = z.object({
   notes:           z.string().optional(),
   customerName:    z.string().optional(),
   isPaid:          z.boolean().default(false),
-  paymentMethod:   z.enum(['cash', 'qris']).default('cash'),
+  paymentMethod:   z.enum(['cash', 'qris', 'split']).default('cash'),
   paymentLocation: z.enum(['kasir', 'meja']).optional(),
   items: z
     .array(

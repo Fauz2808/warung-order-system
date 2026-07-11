@@ -224,14 +224,17 @@ export default function OrderBaruPage() {
   };
 
   // ── Final submit setelah payment confirmed ────────
-  const handleConfirmPayment = (paymentMethod, receivedAmount) => {
+  const handleConfirmPayment = (paymentMethod, receivedAmount, splitInfo) => {
     const tableId = (orderType === 'take-away' || !selectedTable)
       ? (tables[0]?.id)
       : parseInt(selectedTable);
     if (!tableId) { toast.error('Data meja belum siap.'); return; }
-    const paymentNote = paymentMethod === 'cash'
-      ? `[Bayar Cash: ${formatRupiah(receivedAmount)}, Kembalian: ${formatRupiah(receivedAmount - totalAmount)}]`
-      : '[Bayar QRIS]';
+    const paymentNote =
+      paymentMethod === 'cash'
+        ? `[Bayar Cash: ${formatRupiah(receivedAmount)}, Kembalian: ${formatRupiah(receivedAmount - totalAmount)}]`
+        : paymentMethod === 'split'
+          ? `[Pisah Bayar: Cash ${formatRupiah(splitInfo?.cashAmount || 0)} + QRIS ${formatRupiah(splitInfo?.qrisAmount || 0)}]`
+          : '[Bayar QRIS]';
     const finalNotes = [orderNotes, paymentNote].filter(Boolean).join(' · ');
 
     orderMutation.mutate({
@@ -239,7 +242,7 @@ export default function OrderBaruPage() {
       orderType,
       customerName: customerName.trim() || undefined,
       isPaid: true,
-      paymentMethod: paymentMethod === 'qris' ? 'qris' : 'cash',
+      paymentMethod: paymentMethod === 'qris' ? 'qris' : paymentMethod === 'split' ? 'split' : 'cash',
       notes: finalNotes || undefined,
       items: cart.map((i) => ({
         menuId: i.menuId,
@@ -944,23 +947,33 @@ function AddItemModal({ item, needsTemp, onConfirm, onClose }) {
 
 // ─── Modal Pembayaran ────────────────────────────────
 function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
-  const [method, setMethod]           = useState('cash');
-  const [receivedRaw, setReceivedRaw] = useState('');
+  const [method, setMethod]             = useState('cash');
+  const [receivedRaw, setReceivedRaw]   = useState('');
+  const [splitCashRaw, setSplitCashRaw] = useState(''); // porsi cash saat pisah bayar
 
   const fmt = (n) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
   const received   = parseInt(receivedRaw, 10) || 0;
   const change     = received - totalAmount;
-  const canConfirm = method === 'qris' || (method === 'cash' && received >= totalAmount);
 
-  const padPress = (key) => {
+  // Pisah bayar: customer bayar sebagian cash, sisanya otomatis QRIS
+  const splitCash  = parseInt(splitCashRaw, 10) || 0;
+  const splitQris  = splitCash > 0 ? Math.max(0, totalAmount - splitCash) : 0;
+  const splitValid = splitCash > 0 && splitCash < totalAmount;
+
+  const canConfirm =
+    method === 'qris' ||
+    (method === 'cash'  && received >= totalAmount) ||
+    (method === 'split' && splitValid);
+
+  const padPress = (key, setter = setReceivedRaw) => {
     if (key === '⌫') {
-      setReceivedRaw((p) => p.slice(0, -1));
+      setter((p) => p.slice(0, -1));
     } else if (key === 'C') {
-      setReceivedRaw('');
+      setter('');
     } else {
-      setReceivedRaw((p) => {
+      setter((p) => {
         const next = p + key;
         return next.length > 10 ? p : next;
       });
@@ -1016,19 +1029,19 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
               <p className="text-xl font-bold" style={{ color: '#1B4332' }}>{fmt(totalAmount)}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { value: 'cash', label: 'Cash',  desc: 'Bayar tunai' },
-                { value: 'qris', label: 'QRIS',  desc: 'Scan QR code' },
+                { value: 'cash',  label: '💵 Cash' },
+                { value: 'qris',  label: '📱 QRIS' },
+                { value: 'split', label: '✂️ Pisah' },
               ].map((opt) => (
                 <button key={opt.value}
-                  onClick={() => { setMethod(opt.value); setReceivedRaw(''); }}
-                  className="py-2.5 px-3 rounded-xl border-2 text-left transition"
+                  onClick={() => { setMethod(opt.value); setReceivedRaw(''); setSplitCashRaw(''); }}
+                  className="py-2.5 rounded-xl border-2 font-bold text-sm transition"
                   style={method === opt.value
-                    ? { borderColor: '#1B4332', background: '#D8F3DC' }
-                    : { borderColor: '#E8ECE4', background: '#FFFFFF' }}>
-                  <p className="font-bold text-sm" style={{ color: method === opt.value ? '#1B4332' : '#1A1A1A' }}>{opt.label}</p>
-                  <p className="text-xs" style={{ color: '#9CA3AF' }}>{opt.desc}</p>
+                    ? { borderColor: '#1B4332', background: '#D8F3DC', color: '#1B4332' }
+                    : { borderColor: '#E8ECE4', background: '#FFFFFF', color: '#1A1A1A' }}>
+                  {opt.label}
                 </button>
               ))}
             </div>
@@ -1126,9 +1139,93 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
               </div>
             )}
 
+            {method === 'split' && (
+              <div className="space-y-3">
+                <p className="text-xs" style={{ color: '#9CA3AF' }}>
+                  Masukkan porsi <span className="font-semibold" style={{ color: '#1B4332' }}>Cash</span>, sisanya otomatis dibayar QRIS.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Porsi Cash */}
+                  <div className="rounded-2xl px-3 py-3 border-2" style={{ borderColor: '#1B4332', background: '#F0FDF4' }}>
+                    <p className="text-xs font-semibold mb-1" style={{ color: '#9CA3AF' }}>💵 Cash</p>
+                    <p className="text-base font-bold leading-tight" style={{ color: splitCash > 0 ? '#1B4332' : '#C8CCBE' }}>
+                      {splitCash > 0 ? fmt(splitCash) : 'Rp —'}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#1B4332' }}>▸ Ketik nominal</p>
+                  </div>
+                  {/* Porsi QRIS — otomatis */}
+                  <div className="rounded-2xl px-3 py-3 border-2" style={{ borderColor: '#E8ECE4', background: '#FAFAF8' }}>
+                    <p className="text-xs font-semibold mb-1" style={{ color: '#9CA3AF' }}>📱 QRIS</p>
+                    <p className="text-base font-bold leading-tight" style={{ color: splitQris > 0 ? '#7C3AED' : '#C8CCBE' }}>
+                      {splitQris > 0 ? fmt(splitQris) : 'Rp —'}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>Otomatis</p>
+                  </div>
+                </div>
+
+                {splitCash > 0 && (
+                  <div className="rounded-xl px-3 py-2 text-xs font-semibold" style={{
+                    background: splitValid ? '#F0FDF4' : '#FEF2F2',
+                    color: splitValid ? '#166534' : '#DC2626',
+                  }}>
+                    {splitValid
+                      ? `✅ Cash ${fmt(splitCash)} + QRIS ${fmt(splitQris)} = ${fmt(totalAmount)}`
+                      : `⚠️ Nominal cash melebihi total — kurangi jumlahnya`}
+                  </div>
+                )}
+
+                {/* Numpad untuk porsi cash */}
+                <div className="grid grid-cols-3 gap-2">
+                  {NUMPAD_ROWS.flat().map((key) => {
+                    const isBackspace = key === '⌫';
+                    const isClear     = key === 'C';
+                    return (
+                      <button key={key}
+                        onClick={() => padPress(key, setSplitCashRaw)}
+                        className="rounded-2xl font-bold flex items-center justify-center transition select-none"
+                        style={{
+                          height: '3.25rem',
+                          background: isBackspace ? '#FEF2F2' : isClear ? '#F5EFE6' : '#FFFFFF',
+                          color:      isBackspace ? '#DC2626'  : isClear ? '#6B7280' : '#1A1A1A',
+                          border:     `1.5px solid ${isBackspace ? '#FECACA' : '#E8ECE4'}`,
+                          fontSize:   isBackspace ? '1.1rem' : '1.2rem',
+                        }}
+                        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.93)'}
+                        onMouseUp={(e)   => e.currentTarget.style.transform = 'scale(1)'}
+                        onMouseLeave={(e)=> e.currentTarget.style.transform = 'scale(1)'}>
+                        {key}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {NUMPAD_ZEROS.map((key) => (
+                    <button key={key}
+                      onClick={() => padPress(key, setSplitCashRaw)}
+                      className="rounded-2xl font-bold flex items-center justify-center transition select-none"
+                      style={{
+                        height: '3.25rem',
+                        background: '#FFFFFF',
+                        color: '#1A1A1A',
+                        border: '1.5px solid #E8ECE4',
+                        fontSize: '1.1rem',
+                        letterSpacing: '0.05em',
+                      }}
+                      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.93)'}
+                      onMouseUp={(e)   => e.currentTarget.style.transform = 'scale(1)'}
+                      onMouseLeave={(e)=> e.currentTarget.style.transform = 'scale(1)'}>
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 pt-1">
               <button
-                onClick={() => onConfirm(method, received)}
+                onClick={() => method === 'split'
+                  ? onConfirm('split', 0, { cashAmount: splitCash, qrisAmount: splitQris })
+                  : onConfirm(method, received)}
                 disabled={!canConfirm || isPending}
                 className="w-full py-4 rounded-2xl font-bold text-sm text-white transition disabled:opacity-40"
                 style={{ background: '#1B4332' }}
@@ -1138,7 +1235,9 @@ function PaymentModal({ totalAmount, onConfirm, onClose, isPending }) {
                   ? 'Membuat order...'
                   : method === 'cash'
                     ? canConfirm ? `Konfirmasi · Kembalian ${fmt(change)}` : 'Masukkan jumlah uang diterima'
-                    : 'Konfirmasi Pembayaran QRIS'}
+                    : method === 'split'
+                      ? canConfirm ? 'Konfirmasi Pisah Bayar' : 'Masukkan porsi cash'
+                      : 'Konfirmasi Pembayaran QRIS'}
               </button>
               <button onClick={onClose}
                 className="w-full py-2.5 rounded-xl text-sm font-medium border transition"
