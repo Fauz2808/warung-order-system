@@ -36,6 +36,44 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/sessions/:id/call — customer memanggil kasir (public)
+router.post('/:id/call', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const session = await prisma.tableSession.findUnique({ where: { id }, include: { table: true } });
+    if (!session || session.status !== 'open') {
+      return res.status(404).json({ success: false, message: 'Bon tidak ditemukan / sudah ditutup' });
+    }
+    const updated = await prisma.tableSession.update({
+      where: { id },
+      data: { callRequestedAt: new Date() },
+    });
+    if (req.io) {
+      req.io.emit('session:call', { sessionId: id, tableId: session.tableId, tableNumber: session.table?.number });
+    }
+    res.json({ success: true, data: updated, message: 'Kasir sedang menuju mejamu' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Gagal memanggil kasir' });
+  }
+});
+
+// POST /api/sessions/:id/ack-call — kasir menandai panggilan sudah dilayani (auth)
+router.post('/:id/ack-call', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const updated = await prisma.tableSession.update({
+      where: { id },
+      data: { callRequestedAt: null },
+    });
+    if (req.io) req.io.emit('session:call_ack', { sessionId: id });
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ success: false, message: 'Bon tidak ditemukan' });
+    res.status(500).json({ success: false, message: 'Gagal memperbarui panggilan' });
+  }
+});
+
 // POST /api/sessions/:id/close — tutup bon + catat pembayaran (auth kasir)
 // Body: { paymentMethod: 'cash'|'qris'|'split', cashAmount?, qrisAmount?, notes? }
 router.post('/:id/close', authMiddleware, async (req, res) => {
@@ -90,6 +128,7 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
         data: {
           status: 'closed',
           closedAt: new Date(),
+          callRequestedAt: null,
           isPaid: true,
           paymentMethod: method,
           notes: payNote,

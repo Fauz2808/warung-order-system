@@ -115,6 +115,13 @@ export const closeSession = (id, payload) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
   return api.post(`/sessions/${id}/close`, payload, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
 };
+// Customer memanggil kasir (public)
+export const callWaiter = (id) => api.post(`/sessions/${id}/call`).then((r) => r.data);
+// Kasir menandai panggilan sudah dilayani
+export const ackCall = (id) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('kasir_token') : null;
+  return api.post(`/sessions/${id}/ack-call`, {}, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data);
+};
 
 // ─── Categories ───────────────────────────────────────
 export const getCategories  = () => api.get('/categories').then((r) => r.data.data);

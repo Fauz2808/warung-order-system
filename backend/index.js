@@ -109,6 +109,31 @@ setInterval(async () => {
   } catch (_) {}
 }, 60000);
 
+// ─── Auto-close bon nyangkut (open tab lupa ditutup) ───────────
+// Bon yang terbuka > 8 jam kemungkinan besar terlupakan. Tutup otomatis agar
+// meja tidak stuck & customer berikutnya tidak menempel ke bon lama.
+// Order TIDAK ditandai lunas (isPaid tetap false) — bukan omzet.
+const STALE_BON_HOURS = 8;
+setInterval(async () => {
+  try {
+    const cutoff = new Date(Date.now() - STALE_BON_HOURS * 60 * 60 * 1000);
+    const stale = await prisma.tableSession.findMany({
+      where: { status: 'open', openedAt: { lt: cutoff } },
+    });
+    for (const s of stale) {
+      await prisma.$transaction([
+        prisma.tableSession.update({
+          where: { id: s.id },
+          data: { status: 'closed', closedAt: new Date(), callRequestedAt: null },
+        }),
+        prisma.table.update({ where: { id: s.tableId }, data: { isOccupied: false } }),
+      ]);
+      io.emit('session:closed', { sessionId: s.id, tableId: s.tableId });
+    }
+    if (stale.length) console.log(`🧹 Auto-close ${stale.length} bon nyangkut (>${STALE_BON_HOURS} jam)`);
+  } catch (_) {}
+}, 5 * 60 * 1000);
+
 // ─── Self-ping setiap 5 menit agar Railway tidak sleep ─────────
 setInterval(() => {
   const url = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday, getSettings, getOpenSessions, closeSession } from '@/lib/api';
+import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday, getSettings, getOpenSessions, closeSession, ackCall } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
@@ -25,6 +25,15 @@ const floorLabel = (floor) => {
 const formatTime = (dateStr) => {
   const d = new Date(dateStr);
   return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+};
+
+// "dibuka Xm/Xj lalu" — umur relatif untuk kartu bon
+const timeAgo = (dateStr) => {
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000));
+  if (mins < 1) return 'baru saja';
+  if (mins < 60) return `${mins}m lalu`;
+  const h = Math.floor(mins / 60);
+  return `${h}j ${mins % 60}m lalu`;
 };
 
 // Konfigurasi status — urutan, warna, label, tombol aksi
@@ -288,6 +297,17 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
     });
 
+    // Customer memanggil kasir
+    socket.on('session:call', (data) => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      playOrderSound();
+      flashTabTitle(6);
+      toast(`🔔 Meja ${data?.tableNumber ?? '?'} memanggil kasir!`, { duration: 7000, icon: '🔔' });
+    });
+    socket.on('session:call_ack', () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    });
+
     // Reconnect setelah tab wake up / koneksi putus — langsung sync data terbaru
     socket.on('connect', () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -298,6 +318,8 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       socket.off('order:new');
       socket.off('order:status_update');
       socket.off('session:closed');
+      socket.off('session:call');
+      socket.off('session:call_ack');
       socket.off('connect');
       socket.disconnect();
     };
@@ -334,6 +356,12 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
       setPayModalOrder(null);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal update status bayar'),
+  });
+
+  // Tandai panggilan customer sudah dilayani
+  const ackCallMutation = useMutation({
+    mutationFn: (id) => ackCall(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
   });
 
   // Tutup bon (open tab) — bayar sekaligus
@@ -685,14 +713,27 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
             {openSessions.map((s) => {
               const activeOrders = (s.orders || []).filter((o) => o.status !== 'cancelled');
               const allDone = activeOrders.length > 0 && activeOrders.every((o) => o.status === 'done');
+              const called = !!s.callRequestedAt;
               return (
-                <div key={s.id} className="bg-white rounded-2xl p-3.5 shadow-sm border" style={{ borderColor: allDone ? '#1B4332' : '#E8ECE4' }}>
+                <div key={s.id} className="bg-white rounded-2xl p-3.5 shadow-sm border" style={{ borderColor: called ? '#7C3AED' : allDone ? '#1B4332' : '#E8ECE4' }}>
+                  {/* Banner panggilan customer */}
+                  {called && (
+                    <button
+                      onClick={() => ackCallMutation.mutate(s.id)}
+                      className="w-full mb-2 rounded-lg px-2.5 py-1.5 flex items-center justify-between transition active:scale-95"
+                      style={{ background: '#EDE9FE' }}>
+                      <span className="text-xs font-bold" style={{ color: '#7C3AED' }}>🔔 Customer memanggil!</span>
+                      <span className="text-xs font-semibold" style={{ color: '#7C3AED' }}>✓ Dilayani</span>
+                    </button>
+                  )}
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-bold text-sm" style={{ color: '#1A1A1A' }}>
                         Meja {s.table?.number} <span className="font-normal text-xs" style={{ color: '#9CA3AF' }}>· {floorLabel(s.table?.floor)}</span>
                       </p>
-                      {s.customerName && <p className="text-xs" style={{ color: '#9CA3AF' }}>👤 {s.customerName}</p>}
+                      <p className="text-xs" style={{ color: '#9CA3AF' }}>
+                        {s.customerName ? `👤 ${s.customerName} · ` : ''}dibuka {timeAgo(s.openedAt)}
+                      </p>
                     </div>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={allDone
                       ? { background: '#D8F3DC', color: '#1B4332' }
@@ -971,8 +1012,8 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
             </div>
           )}
 
-          {/* Payment reminder — done + belum bayar */}
-          {order.status === 'done' && !order.isPaid && (
+          {/* Payment reminder — done + belum bayar (hanya order lepas, bukan bagian bon) */}
+          {order.status === 'done' && !order.isPaid && !order.sessionId && (
             <div className="flex items-center justify-between px-4 py-2"
               style={{ background: '#F59E0B' }}>
               <div className="flex items-center gap-2">
@@ -1037,11 +1078,14 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
                     <span style={{ opacity: 0.65, marginLeft: 1 }}>· {waitMins}m</span>
                   )}
                 </span>
-                {!order.isPaid && order.status !== 'cancelled' && (
+                {!order.isPaid && order.status !== 'cancelled' && !order.sessionId && (
                   <span
                     style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', display: 'inline-block', flexShrink: 0 }}
                     title="Belum bayar"
                   />
+                )}
+                {!order.isPaid && order.status !== 'cancelled' && order.sessionId && (
+                  <span title="Bagian dari bon terbuka" style={{ fontSize: 11 }}>🧾</span>
                 )}
               </div>
             </div>
@@ -1162,8 +1206,8 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
             </div>
           </div>
 
-          {/* Tandai Lunas */}
-          {!order.isPaid && order.status !== 'cancelled' && (
+          {/* Tandai Lunas — hanya untuk order lepas (tanpa bon). Order dalam bon dibayar via Tutup Bon */}
+          {!order.isPaid && order.status !== 'cancelled' && !order.sessionId && (
             <div className="px-4 pb-3">
               <button
                 onClick={() => onOpenPayModal(order)}
@@ -1173,6 +1217,14 @@ function OrderCard({ order, onUpdateStatus, isUpdating, isSelected, onToggleSele
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#6B7280'; }}>
                 Tandai Lunas
               </button>
+            </div>
+          )}
+          {/* Order bagian dari bon terbuka — bayar lewat Tutup Bon */}
+          {!order.isPaid && order.status !== 'cancelled' && order.sessionId && (
+            <div className="px-4 pb-3">
+              <div className="w-full py-2 rounded-lg text-xs font-medium text-center" style={{ background: '#F5EFE6', color: '#6B7280' }}>
+                🧾 Bagian dari bon meja — bayar via <span className="font-semibold" style={{ color: '#1B4332' }}>Tutup Bon</span>
+              </div>
             </div>
           )}
 

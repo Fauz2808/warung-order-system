@@ -110,8 +110,9 @@ model TableSession {
   table         Table     @relation(fields: [tableId], references: [id])
   status        String    @default("open")   // "open" | "closed"
   customerName  String?
-  openedAt      DateTime  @default(now())
-  closedAt      DateTime?
+  openedAt        DateTime  @default(now())
+  closedAt        DateTime?
+  callRequestedAt DateTime?               // customer menekan "Panggil Kasir" (null = tidak ada panggilan)
   isPaid        Boolean   @default(false)
   paymentMethod String?                       // "cash" | "qris" | "split" — diisi saat tutup bon
   notes         String?                       // catatan pembayaran, mis. "[Pisah Bayar: Cash X + QRIS Y]"

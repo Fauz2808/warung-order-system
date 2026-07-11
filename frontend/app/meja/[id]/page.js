@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getTable, getMenu, createOrder, getSettings, getTableSession } from '@/lib/api';
+import { getTable, getMenu, createOrder, getSettings, getTableSession, callWaiter } from '@/lib/api';
 import useCartStore from '@/store/cartStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSocket } from '@/lib/socket';
@@ -925,6 +925,13 @@ const ORDER_STATUS = {
 
 function BonView({ session, table, businessName, onAddMore }) {
   const orders = (session.orders || []).filter((o) => o.status !== 'cancelled');
+  const called = !!session.callRequestedAt;
+
+  const callMutation = useMutation({
+    mutationFn: () => callWaiter(session.id),
+    onSuccess: () => toast.success('🔔 Kasir sedang menuju mejamu!', { duration: 3000 }),
+    onError: () => toast.error('Gagal memanggil, coba lagi'),
+  });
 
   return (
     <div className="min-h-screen pb-32" style={{ background: '#F5EFE6' }}>
@@ -997,14 +1004,28 @@ function BonView({ session, table, businessName, onAddMore }) {
         </div>
       </div>
 
-      {/* Tombol tambah pesanan */}
+      {/* Tombol aksi */}
       <div className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3"
         style={{ background: 'linear-gradient(to top, #F5EFE6 70%, transparent)' }}>
-        <button onClick={onAddMore}
-          className="w-full rounded-2xl py-4 font-bold text-white shadow-lg transition active:scale-95"
-          style={{ background: PRIMARY }}>
-          + Tambah Pesanan
-        </button>
+        {called && (
+          <div className="rounded-xl px-3 py-2 mb-2 text-center text-xs font-semibold" style={{ background: '#EDE9FE', color: '#7C3AED' }}>
+            🔔 Kasir sedang menuju mejamu...
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => callMutation.mutate()}
+            disabled={called || callMutation.isPending}
+            className="rounded-2xl py-4 font-bold shadow-sm transition active:scale-95 border-2 disabled:opacity-60"
+            style={{ borderColor: PRIMARY, color: PRIMARY, background: '#fff' }}>
+            {called ? '🔔 Dipanggil' : '🔔 Panggil Kasir'}
+          </button>
+          <button onClick={onAddMore}
+            className="rounded-2xl py-4 font-bold text-white shadow-lg transition active:scale-95"
+            style={{ background: PRIMARY }}>
+            + Tambah
+          </button>
+        </div>
         <p className="text-center text-xs mt-2" style={{ color: '#9CA3AF' }}>Halaman ini otomatis update ☕</p>
       </div>
     </div>
