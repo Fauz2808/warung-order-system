@@ -203,8 +203,18 @@ export default function MejaPage() {
     return <ThankYouScreen table={table} onReset={() => { setJustClosed(false); setShowMenu(false); }} />;
   }
 
-  // Ada bon terbuka & tidak sedang menambah → tampilkan Bon (open tab)
+  // Ada bon & tidak sedang menambah → tampilkan Bon (open) atau layar menunggu (awaiting)
   if (session && !showMenu) {
+    if (session.phase === 'awaiting') {
+      return (
+        <PaidWaitingView
+          session={session}
+          table={table}
+          businessName={shopSettings?.businessName}
+          onOrderMore={() => setShowMenu(true)}
+        />
+      );
+    }
     return (
       <BonView
         session={session}
@@ -1026,6 +1036,90 @@ function BonView({ session, table, businessName, onAddMore }) {
             + Tambah
           </button>
         </div>
+        <p className="text-center text-xs mt-2" style={{ color: '#9CA3AF' }}>Halaman ini otomatis update ☕</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── PaidWaitingView — sudah bayar, pesanan masih disiapkan dapur ───────
+function PaidWaitingView({ session, table, businessName, onOrderMore }) {
+  const orders = (session.orders || []).filter((o) => o.status !== 'cancelled');
+  const allReady = orders.length > 0 && orders.every((o) => o.status === 'done');
+
+  return (
+    <div className="min-h-screen pb-32" style={{ background: '#F5EFE6' }}>
+      {/* Header */}
+      <div className="px-4 pt-10 pb-5">
+        <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: PRIMARY }}>
+          {businessName || 'Warung Kita'}
+        </p>
+        <h1 className="text-3xl font-black" style={{ color: '#1A1A1A', letterSpacing: '-0.5px' }}>
+          Meja {table?.number}
+        </h1>
+      </div>
+
+      {/* Banner sudah bayar */}
+      <div className="px-4">
+        <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: PRIMARY_LIGHT }}>
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="font-bold text-sm" style={{ color: PRIMARY }}>Pembayaran diterima!</p>
+            <p className="text-xs mt-0.5" style={{ color: '#1B4332' }}>
+              {allReady ? 'Semua pesanan sudah siap. Selamat menikmati ☕' : 'Pesanan kamu sedang disiapkan ya ☕'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Daftar pesanan + status dapur */}
+      <div className="px-4 mt-4 space-y-3">
+        {orders.map((o) => {
+          const st = ORDER_STATUS[o.status] || { label: o.status, bg: '#F5EFE6', color: '#6B7280' };
+          return (
+            <div key={o.id} className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: '1px solid #F0F0EC' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold" style={{ color: '#9CA3AF' }}>Order #{o.dailyNumber || o.id}</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: st.bg, color: st.color }}>
+                  {st.label}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {(o.items || []).map((it) => (
+                  <div key={it.id}>
+                    <div className="flex justify-between text-sm">
+                      <span style={{ color: '#1A1A1A' }}>{it.quantity}× {it.menuName || it.menu?.name}</span>
+                      <span style={{ color: '#6B7280' }}>{formatRupiah(it.price * it.quantity)}</span>
+                    </div>
+                    {it.notes && (
+                      <p className="text-xs mt-0.5 px-2 py-0.5 rounded-full inline-block" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                        {it.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Total dibayar */}
+      <div className="px-4 mt-4">
+        <div className="rounded-2xl p-4 flex justify-between items-center" style={{ background: '#fff', border: '1px solid #F0F0EC' }}>
+          <span className="font-bold" style={{ color: '#1A1A1A' }}>Total Dibayar</span>
+          <span className="font-black text-xl" style={{ color: PRIMARY }}>{formatRupiah(session.runningTotal || 0)}</span>
+        </div>
+      </div>
+
+      {/* Pesan lagi */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-6 pt-3"
+        style={{ background: 'linear-gradient(to top, #F5EFE6 70%, transparent)' }}>
+        <button onClick={onOrderMore}
+          className="w-full rounded-2xl py-4 font-bold shadow-sm transition active:scale-95 border-2"
+          style={{ borderColor: PRIMARY, color: PRIMARY, background: '#fff' }}>
+          + Pesan Lagi
+        </button>
         <p className="text-center text-xs mt-2" style={{ color: '#9CA3AF' }}>Halaman ini otomatis update ☕</p>
       </div>
     </div>

@@ -54,8 +54,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/tables/:id/session — bon (open tab) terbuka untuk meja (by NUMBER), public
-// Dipakai halaman customer untuk resume/gabung bon & polling status
+// GET /api/tables/:id/session — bon (open tab) untuk meja (by NUMBER), public
+// Dipakai halaman customer untuk resume/gabung bon & polling status.
+// phase 'open'     = bon masih berjalan (bisa nambah, bayar nanti)
+// phase 'awaiting' = sudah bayar (bon ditutup) tapi masih ada pesanan diproses dapur
 router.get('/:id/session', async (req, res) => {
   try {
     const number = parseInt(req.params.id);
@@ -64,16 +66,37 @@ router.get('/:id/session', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Meja tidak ditemukan' });
     }
 
-    const session = await prisma.tableSession.findFirst({
+    const withOrders = {
+      orders: {
+        include: { items: { include: { menu: true, modifiers: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+    };
+
+    // 1. Bon yang masih terbuka
+    let session = await prisma.tableSession.findFirst({
       where: { tableId: table.id, status: 'open' },
       orderBy: { openedAt: 'desc' },
-      include: {
-        orders: {
-          include: { items: { include: { menu: true, modifiers: true } } },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
+      include: withOrders,
     });
+    let phase = 'open';
+
+    // 2. Kalau tidak ada: bon yang baru ditutup (<4 jam) tapi masih ada pesanan
+    //    belum selesai dimasak → fase "menunggu dapur" (sudah dibayar).
+    if (!session) {
+      const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000);
+      const awaiting = await prisma.tableSession.findFirst({
+        where: {
+          tableId: table.id,
+          status: 'closed',
+          closedAt: { gte: cutoff },
+          orders: { some: { status: { notIn: ['done', 'cancelled'] } } },
+        },
+        orderBy: { closedAt: 'desc' },
+        include: withOrders,
+      });
+      if (awaiting) { session = awaiting; phase = 'awaiting'; }
+    }
 
     if (!session) {
       return res.json({ success: true, data: null });
@@ -83,7 +106,7 @@ router.get('/:id/session', async (req, res) => {
       .filter((o) => o.status !== 'cancelled')
       .reduce((s, o) => s + o.totalAmount, 0);
 
-    res.json({ success: true, data: { ...session, runningTotal } });
+    res.json({ success: true, data: { ...session, phase, runningTotal } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Gagal mengambil data bon meja' });

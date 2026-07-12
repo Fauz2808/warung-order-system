@@ -115,12 +115,15 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
     }
 
     const activeIds = activeOrders.map((o) => o.id);
+    // Order yang masih perlu dimasak (belum 'done'). Status dapur TIDAK diubah saat tutup bon.
+    const remainingToPrepare = activeOrders.filter((o) => o.status !== 'done').length;
 
-    await prisma.$transaction([
-      // Tandai semua order aktif di bon: lunas + metode + selesai
+    const ops = [
+      // Tandai order aktif di bon: LUNAS saja — status dapur dibiarkan apa adanya
+      // (dapur yang menandai 'selesai' manual saat masakan benar-benar jadi).
       prisma.order.updateMany({
         where: { id: { in: activeIds } },
-        data: { isPaid: true, paymentMethod: method, status: 'done' },
+        data: { isPaid: true, paymentMethod: method },
       }),
       // Tutup sesi + catat pembayaran
       prisma.tableSession.update({
@@ -134,12 +137,13 @@ router.post('/:id/close', authMiddleware, async (req, res) => {
           notes: payNote,
         },
       }),
-      // Kosongkan meja
-      prisma.table.update({
-        where: { id: session.tableId },
-        data: { isOccupied: false },
-      }),
-    ]);
+    ];
+    // Meja hanya dikosongkan kalau semua pesanan sudah selesai dimasak. Kalau masih
+    // ada yang diproses, meja bebas otomatis saat order terakhir ditandai 'done'.
+    if (remainingToPrepare === 0) {
+      ops.push(prisma.table.update({ where: { id: session.tableId }, data: { isOccupied: false } }));
+    }
+    await prisma.$transaction(ops);
 
     const updated = await prisma.tableSession.findUnique({
       where: { id },

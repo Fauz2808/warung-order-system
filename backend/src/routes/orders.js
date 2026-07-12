@@ -380,8 +380,9 @@ router.put('/:id/status', async (req, res) => {
         where: { tableId: order.tableId, status: 'open' },
       });
       if (!openSession) {
+        // Order yang masih perlu dikerjakan (bukan done/cancelled). Kalau 0 → meja bebas.
         const activeOrders = await prisma.order.count({
-          where: { tableId: order.tableId, status: { not: 'done' } },
+          where: { tableId: order.tableId, status: { notIn: ['done', 'cancelled'] } },
         });
         if (activeOrders === 0) {
           await prisma.table.update({
