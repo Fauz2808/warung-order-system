@@ -912,8 +912,14 @@ ${session.notes ? `<div class="divider"></div><div style="font-size:10px;color:#
       <EditOrderModal
         order={editOrder}
         onClose={() => setEditOrder(null)}
-        onSaved={() => {
+        onSaved={(updatedOrder) => {
           setEditOrder(null);
+          // Tulis langsung hasil dari server ke cache 'orders' (instan, apa adanya dari DB)
+          if (updatedOrder?.id) {
+            queryClient.setQueriesData({ queryKey: ['orders'] }, (old) =>
+              Array.isArray(old) ? old.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o)) : old
+            );
+          }
           queryClient.invalidateQueries({ queryKey: ['orders'] });
           queryClient.invalidateQueries({ queryKey: ['sessions'] });
         }}
@@ -2086,8 +2092,8 @@ function EditOrderModal({ order, onClose, onSaved }) {
 
   const editMutation = useMutation({
     mutationFn: (items) => editOrderItems(order.id, items),
-    onSuccess: () => { toast.success('Order berhasil diubah!'); onSaved(); },
-    onError: (err) => toast.error(err.response?.data?.message || 'Gagal mengubah order'),
+    onSuccess: (res) => { toast.success('Order berhasil diubah!'); onSaved(res?.data); },
+    onError: (err) => toast.error(err.response?.data?.message || `Gagal mengubah order (${err.response?.status || 'jaringan'})`),
   });
 
   const totalAmount = cart.reduce((sum, i) => {
