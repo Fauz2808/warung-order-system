@@ -912,7 +912,11 @@ ${session.notes ? `<div class="divider"></div><div style="font-size:10px;color:#
       <EditOrderModal
         order={editOrder}
         onClose={() => setEditOrder(null)}
-        onSaved={() => { setEditOrder(null); queryClient.invalidateQueries({ queryKey: ['orders'] }); }}
+        onSaved={() => {
+          setEditOrder(null);
+          queryClient.invalidateQueries({ queryKey: ['orders'] });
+          queryClient.invalidateQueries({ queryKey: ['sessions'] });
+        }}
       />
     )}
     {cancelOrder && (
@@ -2112,7 +2116,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
       menuName:                item.name,
       price:                   item.price,
       quantity:                1,
-      notes:                   [temperature ? (temperature === 'hot' ? '🔥 Hot' : '🧊 Ice') : null, notes || null].filter(Boolean).join(' · '),
+      notes:                   [temperature ? (String(temperature).toLowerCase() === 'hot' ? '🔥 Hot' : '🧊 Ice') : null, notes || null].filter(Boolean).join(' · '),
       additionalEspressoShots: additionalEspressoShots || 0,
       additionalEspressoPrice: additionalEspressoPrice || item.additionalEspressoPrice || 0,
     }]);
