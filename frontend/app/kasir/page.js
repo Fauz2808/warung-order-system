@@ -10,7 +10,7 @@ import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu,
 import { getSocket } from '@/lib/socket';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
-import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, tryAutoReconnect, hasRememberedPrinter, watchForPrinter } from '@/lib/thermalPrinter';
+import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, printBonReceipt, tryAutoReconnect, hasRememberedPrinter, watchForPrinter } from '@/lib/thermalPrinter';
 import { Printer, Bell } from '@phosphor-icons/react';
 
 const formatRupiah = (n) =>
@@ -211,6 +211,66 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     }
   };
 
+  // Cetak struk GABUNGAN 1 bon (semua order dalam 1 struk). Tanpa buka picker —
+  // kalau printer terhubung pakai thermal, kalau tidak pakai print browser (iframe).
+  const handlePrintBon = async (session) => {
+    if (!session) return;
+    const orders = (session.orders || []).filter((o) => o.status !== 'cancelled');
+    const total  = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+    const payLabel = session.paymentMethod === 'qris' ? 'QRIS'
+      : session.paymentMethod === 'split' ? 'Pisah Bayar' : 'Cash';
+
+    if (isPrinterConnected()) {
+      const tid = toast.loading('🖨️ Mencetak struk bon...');
+      try {
+        await printBonReceipt(session, user?.name || user?.username);
+        toast.success('🖨️ Struk bon dicetak!', { id: tid });
+      } catch (err) {
+        toast.error(err.message || 'Gagal cetak', { id: tid });
+      }
+      return;
+    }
+
+    // Fallback ke print browser (iframe) — struk gabungan
+    const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+    const fmtDt = (s) => new Date(s).toLocaleString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const itemRows = orders.flatMap((o) => (o.items || []).map((item) => `
+      <tr>
+        <td style="padding:3px 0">${item.quantity}x ${item.menuName || item.menu?.name || '-'}${item.notes ? `<br><small style="color:#888">↳ ${item.notes}</small>` : ''}</td>
+        <td style="text-align:right;padding:3px 0;white-space:nowrap">${fmt((item.price + (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0)) * item.quantity)}</td>
+      </tr>`)).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Struk Bon Meja ${session.table?.number}</title>
+<style>@page{size:58mm auto;margin:2mm 0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;color:#000;width:54mm;padding:2mm}.center{text-align:center}.bold{font-weight:bold}.divider{border-top:1px dashed #999;margin:4px 0}table{width:100%;border-collapse:collapse}td{font-size:11px;vertical-align:top}.total-row td{font-weight:bold;font-size:13px;padding-top:4px}.footer{text-align:center;margin-top:6px;font-size:10px;color:#555}</style>
+</head><body>
+<div class="center" style="margin-bottom:10px"><div class="bold" style="font-size:16px">${(shopSettings?.businessName || 'Warung Kita').toUpperCase()}</div></div>
+<div class="divider"></div>
+<table style="margin-bottom:8px">
+<tr><td style="color:#555">Meja</td><td style="text-align:right">Meja ${session.table?.number} · ${floorLabel(session.table?.floor)}</td></tr>
+<tr><td style="color:#555">Tanggal</td><td style="text-align:right">${fmtDt(session.closedAt || new Date())}</td></tr>
+${session.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-align:right">${session.customerName}</td></tr>` : ''}
+<tr><td style="color:#555">Jml Order</td><td style="text-align:right">${orders.length}</td></tr>
+<tr><td style="color:#555">Pembayaran</td><td style="text-align:right;font-weight:bold">${payLabel}</td></tr>
+</table><div class="divider"></div>
+<table style="margin-bottom:4px">${itemRows}</table>
+<div class="divider"></div>
+<table><tr class="total-row"><td>TOTAL</td><td style="text-align:right">${fmt(total)}</td></tr></table>
+${session.notes ? `<div class="divider"></div><div style="font-size:10px;color:#555">${session.notes}</div>` : ''}
+<div class="divider"></div>
+<div class="footer"><div>Terima kasih telah berkunjung!</div><div>— ${shopSettings?.businessName || 'Warung Kita'} —</div></div>
+</body></html>`;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    };
+  };
+
   // Cek & minta permission notifikasi saat pertama kali load
   useEffect(() => {
     if (!('Notification' in window)) return;
@@ -364,14 +424,16 @@ ${order.customerName ? `<tr><td style="color:#555">Customer</td><td style="text-
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
   });
 
-  // Tutup bon (open tab) — bayar sekaligus
+  // Tutup bon (open tab) — bayar sekaligus + cetak 1 struk gabungan
   const closeBonMutation = useMutation({
     mutationFn: ({ id, ...payload }) => closeSession(id, payload),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       toast.success(`Bon Meja ${closeBonSession?.table?.number} ditutup & lunas ✅`);
       setCloseBonSession(null);
+      // Cetak 1 struk gabungan untuk seluruh bon
+      if (res?.data) handlePrintBon(res.data);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal menutup bon'),
   });
@@ -1367,6 +1429,26 @@ function CloseBonModal({ session, onConfirm, onClose, isPending }) {
         </div>
 
         <div className="px-4 py-4 space-y-3 overflow-y-auto" style={{ maxHeight: '85vh' }}>
+          {/* Rincian item gabungan (semua order jadi 1 struk) */}
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: '#E8ECE4' }}>
+            <div className="px-3 py-2 text-xs font-semibold" style={{ background: '#FAFAF8', color: '#6B7280' }}>
+              Rincian ({activeOrders.length} order · {itemCount} item)
+            </div>
+            <div className="px-3 py-2 space-y-1 max-h-40 overflow-y-auto">
+              {activeOrders.flatMap((o) => (o.items || []).map((it) => (
+                <div key={it.id} className="flex justify-between text-xs">
+                  <span className="truncate pr-2" style={{ color: '#1A1A1A' }}>
+                    {it.quantity}× {it.menuName || it.menu?.name}
+                    {it.notes ? <span style={{ color: '#9CA3AF' }}> · {it.notes}</span> : null}
+                  </span>
+                  <span className="shrink-0" style={{ color: '#6B7280' }}>
+                    {fmt((it.price + (it.additionalEspressoShots || 0) * (it.additionalEspressoPrice || 0)) * it.quantity)}
+                  </span>
+                </div>
+              )))}
+            </div>
+          </div>
+
           {/* Total */}
           <div className="rounded-2xl px-4 py-3 flex items-center justify-between" style={{ background: '#D8F3DC' }}>
             <p className="text-xs font-semibold" style={{ color: '#6B7280' }}>Total Tagihan</p>

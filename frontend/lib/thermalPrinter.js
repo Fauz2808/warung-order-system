@@ -352,3 +352,88 @@ export async function printReceipt(order, kasirName) {
     _printing = false;
   }
 }
+
+// ── Struk gabungan untuk satu BON (open tab) — semua order dalam 1 struk ──
+export async function printBonReceipt(session, kasirName) {
+  if (!isPrinterConnected()) throw new Error('Printer belum terhubung');
+  if (_printing) throw new Error('Sedang mencetak, tunggu sebentar');
+
+  _printing = true;
+  try {
+    const orders  = (session.orders || []).filter((o) => o.status !== 'cancelled');
+    const total   = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+    const table   = session.table;
+    const payLabel = session.paymentMethod === 'qris' ? 'QRIS'
+      : session.paymentMethod === 'split' ? 'Pisah Bayar' : 'Cash';
+
+    const parts = [
+      cmd.init(), cmd.lf(),
+      cmd.center(), cmd.bold(true), cmd.dblHeight(),
+      txt('CARRA COFFEE\n'),
+      cmd.normal(), cmd.bold(false),
+      ...(kasirName ? [cmd.center(), txt(`Kasir: ${kasirName.slice(0, 24)}\n`), cmd.left()] : []),
+      cmd.lf(), cmd.left(),
+      divider(),
+      row('Meja:', `${table?.number ?? '-'} Lt.${table?.floor ?? '-'}`),
+      row('Tanggal:', fmtDate(session.closedAt || new Date().toISOString())),
+      ...(session.customerName ? [row('Customer:', session.customerName.slice(0, 18))] : []),
+      row('Jml Order:', `${orders.length}`),
+      row('Pembayaran:', payLabel),
+      divider(),
+    ];
+
+    // Semua item dari semua order digabung
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        const espressoExtra = (item.additionalEspressoShots || 0) * (item.additionalEspressoPrice || 0);
+        const unitPrice     = (item.price || 0) + espressoExtra;
+        const totalPrice    = unitPrice * item.quantity;
+        const name          = (item.menuName || item.menu?.name || '-').slice(0, 20);
+        const label         = `${item.quantity}x ${name}`;
+        const price         = fmt(totalPrice);
+
+        if (label.length + price.length + 1 <= W) parts.push(row(label, price));
+        else { parts.push(txt((label + '\n').slice(0, W + 1))); parts.push(row('', price)); }
+
+        if (item.additionalEspressoShots > 0) {
+          parts.push(txt(`   +${item.additionalEspressoShots} Espresso Shot\n`));
+        }
+        if (item.notes) {
+          const cleaned = item.notes
+            .split(' · ')
+            .filter((seg) => !/^\+\d+\s*Espresso Shot$/i.test(seg.trim()))
+            .join(' · ');
+          if (cleaned) {
+            const lines = wrapText(cleaned.slice(0, 50), W, '   ');
+            for (const l of lines) parts.push(txt(l + '\n'));
+          }
+        }
+      }
+    }
+
+    if (session.notes) {
+      parts.push(cmd.lf());
+      const noteLines = wrapText(session.notes.slice(0, 80), W);
+      parts.push(txt('Catatan:\n'));
+      for (const l of noteLines) parts.push(txt(l + '\n'));
+    }
+
+    parts.push(
+      divider(),
+      cmd.bold(true),
+      row('TOTAL:', fmt(total)),
+      cmd.bold(false),
+      divider(),
+      cmd.lf(),
+      cmd.center(),
+      txt('Terima kasih sudah berkunjung!\n'),
+      txt('--- Carra Coffee ---\n'),
+      cmd.lf(), cmd.lf(), cmd.lf(),
+      cmd.cut(),
+    );
+
+    await writeChunked(concat(...parts));
+  } finally {
+    _printing = false;
+  }
+}
