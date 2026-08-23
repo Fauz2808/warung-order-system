@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "npx prisma db push --accept-data-loss && node index.js",
+    "start": "npx prisma db push && node index.js",
     "seed": "node prisma/seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -28,6 +28,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "prisma": "^5.22.0",
     "socket.io": "^4.8.3",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {

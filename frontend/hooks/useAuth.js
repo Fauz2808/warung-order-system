@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMe } from '@/lib/api';
+import { disableBackgroundPush } from '@/lib/pushNotifications';
 
 // Decode JWT payload synchronously — tidak butuh API call
 function decodeToken(token) {
@@ -47,7 +48,9 @@ export function useAuth() {
       });
   }, [router]);
 
-  const logout = () => {
+  const logout = async () => {
+    // Explicit logout must stop order alerts on a shared cashier device.
+    await disableBackgroundPush().catch(() => {});
     localStorage.removeItem('kasir_token');
     localStorage.removeItem('kasir_role');
     localStorage.removeItem('kasir_name');

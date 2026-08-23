@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getOrders, updateOrderStatus, markOrderPaid, bulkUpdateStatus, getMenu, editOrderItems, getCategories, getPendingYesterday, getSettings, getOpenSessions, closeSession, ackCall } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
+import { enableBackgroundPush, getPushState, syncExistingPushSubscription } from '@/lib/pushNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import StaffLayout from '@/components/StaffLayout';
 import { isPrinterConnected, isPrintingNow, getConnectedName, connectPrinter, disconnectPrinter, printReceipt, printBonReceipt, tryAutoReconnect, hasRememberedPrinter, watchForPrinter } from '@/lib/thermalPrinter';
@@ -271,14 +272,27 @@ ${session.notes ? `<div class="divider"></div><div style="font-size:10px;color:#
     };
   };
 
-  // Cek & minta permission notifikasi saat pertama kali load
+  // Cek status background push. Subscription lama disinkronkan ke akun aktif,
+  // misalnya setelah logout/login dengan akun staff yang berbeda.
   useEffect(() => {
     if (!('Notification' in window)) return;
     setNotifPermission(Notification.permission);
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().then((p) => setNotifPermission(p));
-    }
+    getPushState().then((state) => {
+      setNotifPermission(state.subscribed ? 'granted' : state.permission === 'denied' ? 'denied' : 'default');
+      if (state.subscribed) syncExistingPushSubscription().catch(() => {});
+    }).catch(() => {});
   }, []);
+
+  const handleEnableNotifications = async () => {
+    try {
+      await enableBackgroundPush();
+      setNotifPermission('granted');
+      toast.success('Background notification aktif!');
+    } catch (error) {
+      setNotifPermission(Notification.permission);
+      toast.error(error.response?.data?.message || error.message || 'Gagal mengaktifkan notifikasi');
+    }
+  };
 
   // Auto-reconnect ke printer yang pernah di-pair — silent, tanpa dialog
   useEffect(() => {
@@ -588,7 +602,7 @@ ${session.notes ? `<div class="divider"></div><div style="font-size:10px;color:#
           </div>
           {notifPermission === 'default' && (
             <button
-              onClick={() => Notification.requestPermission().then((p) => setNotifPermission(p))}
+              onClick={handleEnableNotifications}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition"
               style={{ background: '#F59E0B', color: '#fff' }}
             >

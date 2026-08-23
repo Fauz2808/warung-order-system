@@ -5,6 +5,7 @@ const express = require('express');
 const { z } = require('zod');
 const prisma = require('../prisma');
 const authMiddleware = require('../middleware/auth');
+const { sendNewOrderPush } = require('../lib/pushNotifications');
 
 const router = express.Router();
 
@@ -307,6 +308,12 @@ router.post('/', async (req, res) => {
     if (req.io) {
       req.io.emit('order:new', order);
     }
+
+    // Web Push tetap sampai saat dashboard/PWA ditutup. Jangan tahan response
+    // order jika push provider lambat atau salah satu device sudah kedaluwarsa.
+    sendNewOrderPush(order).catch((error) => {
+      console.error('Gagal mengirim background push:', error);
+    });
 
     // Hitung estimasi waktu tunggu berdasarkan antrian aktif
     const activeCount = await prisma.order.count({

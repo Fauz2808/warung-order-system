@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getSettings, updateSettings, getUsers, createUser, updateUser, deleteUser, changePassword } from '@/lib/api';
 import { isBTSupported, isPrinterConnected, getConnectedName, connectPrinter, disconnectPrinter, tryAutoReconnect } from '@/lib/thermalPrinter';
+import { disableBackgroundPush, enableBackgroundPush, getPushState } from '@/lib/pushNotifications';
 import { Gear, Bell, BellSlash, Printer, Clock, FloppyDisk, ListBullets } from '@phosphor-icons/react';
 
 const EMPTY_USER_FORM  = { username: '', password: '', name: '' };
@@ -23,11 +24,19 @@ function getCurrentUser() {
 
 function NotifToggle() {
   const [permission, setPermission] = useState('default');
+  const [subscribed, setSubscribed] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isIOS, setIsIOS] = useState(false);
   const [isPWA, setIsPWA] = useState(false);
 
   useEffect(() => {
-    if ('Notification' in window) setPermission(Notification.permission);
+    getPushState()
+      .then((state) => {
+        setPermission(state.permission || 'default');
+        setSubscribed(state.subscribed);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
     // Detect iOS/iPadOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -36,33 +45,42 @@ function NotifToggle() {
     setIsPWA(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
   }, []);
 
-  const notSupported = typeof window === 'undefined' || !('Notification' in window) || (isIOS && !isPWA);
+  const notSupported = typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window) || (isIOS && !isPWA);
 
   const handleToggle = async () => {
-    if (notSupported) return; // button disabled
-    if (permission === 'granted') {
-      toast('Untuk menonaktifkan, ubah di pengaturan browser.', { icon: 'ℹ️' });
-      return;
-    }
+    if (notSupported || loading) return;
     if (permission === 'denied') {
       toast.error('Notifikasi sudah diblokir. Buka pengaturan browser untuk mengizinkan kembali.');
       return;
     }
-    const result = await Notification.requestPermission();
-    setPermission(result);
-    if (result === 'granted') toast.success('Notifikasi diaktifkan! 🔔');
-    else if (result === 'denied') toast.error('Notifikasi diblokir. Ubah di pengaturan browser.');
-    else toast('Izin notifikasi belum diberikan.', { icon: 'ℹ️' });
+    setLoading(true);
+    try {
+      if (subscribed) {
+        await disableBackgroundPush();
+        setSubscribed(false);
+        toast.success('Background notification dinonaktifkan');
+      } else {
+        await enableBackgroundPush();
+        setPermission(Notification.permission);
+        setSubscribed(true);
+        toast.success('Background notification aktif! 🔔');
+      }
+    } catch (error) {
+      setPermission('Notification' in window ? Notification.permission : 'default');
+      toast.error(error.response?.data?.message || error.message || 'Gagal mengatur notifikasi');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const isGranted = permission === 'granted';
+  const isGranted = permission === 'granted' && subscribed;
   const isDenied  = permission === 'denied';
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-5" style={{ border: '1px solid #E8ECE4' }}>
       <h2 className="font-bold mb-1 flex items-center gap-2" style={{ color: '#1A1A1A' }}><Bell size={16} weight="duotone" />Notifikasi Order</h2>
       <p className="text-xs mb-4" style={{ color: '#9CA3AF' }}>
-        Terima alert suara + popup saat order baru masuk, meski tab kasir sedang tidak aktif.
+        Terima push notification saat dashboard ditutup atau berjalan di background.
       </p>
 
       {/* iOS not in PWA — special message */}
@@ -90,7 +108,7 @@ function NotifToggle() {
               </p>
               <p className="text-xs mt-0.5" style={{ color: isDenied ? '#DC2626' : '#9CA3AF' }}>
                 {isGranted
-                  ? 'Suara + popup browser aktif saat order masuk'
+                  ? 'Push tersambung ke perangkat ini, termasuk saat app ditutup'
                   : isDenied
                   ? 'Buka Site Settings di browser → izinkan notifikasi'
                   : 'Tap toggle untuk mengaktifkan'}
@@ -99,7 +117,7 @@ function NotifToggle() {
           </div>
           <button
             onClick={handleToggle}
-            disabled={notSupported}
+            disabled={notSupported || loading}
             className="relative inline-flex h-7 w-14 items-center rounded-full transition flex-shrink-0 disabled:opacity-40"
             style={{ backgroundColor: isGranted ? '#1B4332' : '#E8ECE4' }}
           >

@@ -150,6 +150,20 @@ model User {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  pushSubscriptions PushSubscription[]
+}
+
+// Browser/device subscriptions for background staff notifications.
+// One staff account may enable notifications on several phones or computers.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Pengaturan warung — singleton (id selalu 1)
