@@ -12,10 +12,11 @@ const prisma = new PrismaClient({
   },
 });
 
-// Warm up koneksi saat server start — Railway free tier perlu ini
-// agar request pertama tidak timeout
-prisma.$connect()
-  .then(() => console.log('✅ Database connected'))
-  .catch((e) => console.error('⚠️  DB connect error (will retry):', e.message?.split('\n')[0]));
+// Free-hosting health checks must not wake an idle Neon database.
+if (process.env.PAUSE_IDLE_JOBS !== 'true') {
+  prisma.$connect()
+    .then(() => console.log('✅ Database connected'))
+    .catch((e) => console.error('⚠️  DB connect error (will retry):', e.message?.split('\n')[0]));
+}
 
 module.exports = prisma;

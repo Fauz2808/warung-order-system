@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: carra-coffee-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm ci && npx prisma generate
+    startCommand: node index.js
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.3
+      - key: NODE_ENV
+        value: production
+      - key: PAUSE_IDLE_JOBS
+        value: "true"
+      - key: RUN_LEGACY_BACKFILLS
+        value: "false"
+      - key: FRONTEND_URL
+        value: https://www.carracoffee.my.id
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@carracoffee.my.id

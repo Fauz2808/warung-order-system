@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const { createActivityWindow } = require('./src/lib/activityWindow');
 
 // Import routes
 const menuRoutes = require('./src/routes/menu');
@@ -21,6 +22,8 @@ const pushRoutes       = require('./src/routes/push');
 
 const app = express();
 const server = http.createServer(app); // Bungkus express dengan http server (wajib untuk Socket.IO)
+const activity = createActivityWindow();
+const pauseIdleJobs = process.env.PAUSE_IDLE_JOBS === 'true';
 
 // CORS — terima Vercel + localhost
 const ALLOWED_ORIGINS = [
@@ -53,6 +56,8 @@ app.use(express.json()); // Biar bisa baca req.body dalam format JSON
 // Injeksi io ke semua request, biar routes bisa emit Socket.IO events
 app.use((req, res, next) => {
   req.io = io;
+  // Health probes must not keep the database awake on free hosting.
+  if (req.path.startsWith('/api/') && req.path !== '/api/health') activity.touch();
   next();
 });
 
@@ -99,6 +104,7 @@ function checkIsOpenNow(openTime, closeTime, isForceClose) {
 }
 
 setInterval(async () => {
+  if (pauseIdleJobs && !activity.isActive() && io.engine.clientsCount === 0) return;
   try {
     const s = await prisma.settings.findUnique({ where: { id: 1 } });
     if (!s) return;
@@ -117,6 +123,7 @@ setInterval(async () => {
 // Order TIDAK ditandai lunas (isPaid tetap false) — bukan omzet.
 const STALE_BON_HOURS = 8;
 setInterval(async () => {
+  if (pauseIdleJobs && !activity.isActive() && io.engine.clientsCount === 0) return;
   try {
     const cutoff = new Date(Date.now() - STALE_BON_HOURS * 60 * 60 * 1000);
     const stale = await prisma.tableSession.findMany({
@@ -136,14 +143,9 @@ setInterval(async () => {
   } catch (_) {}
 }, 5 * 60 * 1000);
 
-// ─── Self-ping setiap 5 menit agar Railway tidak sleep ─────────
-setInterval(() => {
-  const url = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
-  require('http').get(`${url}/api/health`, () => {}).on('error', () => {});
-}, 5 * 60 * 1000);
-
 // ─── Backfill paymentMethod dari notes (sekali jalan) ──────────
 (async () => {
+  if (process.env.RUN_LEGACY_BACKFILLS === 'false') return;
   try {
     const updated = await prisma.order.updateMany({
       where: { paymentMethod: 'cash', notes: { contains: '[Bayar QRIS]' } },
@@ -160,6 +162,7 @@ setInterval(() => {
 // tanpa open tab) ditandai lunas agar riwayat omzet tetap utuh. Order open-tab
 // (punya sessionId) TIDAK disentuh — lunas hanya saat kasir menutup bon.
 (async () => {
+  if (process.env.RUN_LEGACY_BACKFILLS === 'false') return;
   try {
     const updated = await prisma.order.updateMany({
       where: { status: 'done', isPaid: false, sessionId: null },
